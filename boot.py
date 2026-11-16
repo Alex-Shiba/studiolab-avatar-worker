@@ -33,9 +33,17 @@ def command_name(argv):
     return " ".join(words[:2])
 
 
+def install_environment(env):
+    """The image's own pip settings never reach our installs: on Vast's serverless container pip looked at an index without
+    flit_core («from versions: none», live boot 2026-11-17) while the same image over ssh used PyPI. Indexes are named per call."""
+    result = {name: value for name, value in model_environment(env).items() if not name.upper().startswith(("PIP_", "UV_"))}
+    result["PIP_CONFIG_FILE"] = os.devnull
+    return result
+
+
 def command(argv, **kwargs):
     result = subprocess.run([str(a) for a in argv], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            timeout=1800, env=model_environment(os.environ), **kwargs)
+                            timeout=1800, env=install_environment(os.environ), **kwargs)
     if result.returncode != 0:
         # The children run without credentials in their environment; the tail goes to Vast's log so a failed boot is readable.
         tail = result.stderr.decode("utf-8", errors="replace").strip().splitlines()[-12:]
@@ -112,11 +120,11 @@ def prepare(stage=lambda name: None):
     pip = [python, "-m", "pip", "install", "--disable-pip-version-check"]
     command([*pip, "--index-url", "https://download.pytorch.org/whl/cu124",
              "torch==2.6.0+cu124", "torchvision==0.21.0+cu124", "torchaudio==2.6.0+cu124"])
-    command([*pip, "--no-deps", "--only-binary=:all:", FLASH_WHEEL])
+    command([*pip, "--index-url", "https://pypi.org/simple", "--no-deps", "--only-binary=:all:", FLASH_WHEEL])
     requirements = root / "upstream-filtered.txt"
     requirements.write_text("".join(filtered_requirements((source / name).read_text())
                                     for name in ("requirements.txt", "requirements_avatar.txt")), encoding="utf-8")
-    command([*pip, "-r", requirements, "-c", Path(__file__).with_name("runtime-constraints.txt"),
+    command([*pip, "--index-url", "https://pypi.org/simple", "-r", requirements, "-c", Path(__file__).with_name("runtime-constraints.txt"),
              "huggingface_hub==0.35.3", "accelerate==1.10.1", "Pillow==12.2.0"])
     command([python, "-c", "import torch, flash_attn, ctypes, pathlib; "
              "assert torch.__version__ == '2.6.0+cu124'; assert torch.version.cuda == '12.4'; "

@@ -51,3 +51,13 @@ def test_markers_also_reach_the_container_output(tmp_path, monkeypatch, capsys):
     log_marker("AVATAR_STAGE install")
     assert (tmp_path / "markers.log").read_text(encoding="utf-8") == "AVATAR_STAGE install\n"
     assert "AVATAR_STAGE install" in capsys.readouterr().out
+
+
+def test_install_environment_drops_image_pip_settings():
+    env = {"PATH": "/usr/bin", "PIP_INDEX_URL": "https://mirror.invalid/simple", "pip_extra_index_url": "x", "UV_INDEX_URL": "y",
+           "VAST_API_KEY": "fake-secret-value", "HOME": "/root"}
+    result = boot.install_environment(env)
+    assert result["PATH"] == "/usr/bin" and result["HOME"] == "/root"
+    assert not any(name.upper().startswith(("PIP_INDEX", "PIP_EXTRA", "UV_")) for name in result)
+    assert "VAST_API_KEY" not in result
+    assert result["PIP_CONFIG_FILE"] == boot.os.devnull

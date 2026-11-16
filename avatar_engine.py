@@ -18,7 +18,9 @@ MODEL_TYPE = "avatar-v1.6"
 MIX_STEPS = 4
 MIX_ALPHA = 1.0
 INFERENCE_STEPS = 8
-NEGATIVE_PROMPT = 'Close-up, Bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards'
+# Upstream negative prompt plus text words: a 25 s take whose scene said «recites a poem» grew fake captions in its last segments
+# (live run 2026-11-17); the same take with a neutral scene had none.
+NEGATIVE_PROMPT = 'Close-up, Bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards, text, captions, letters, watermark, logo'
 
 
 def torch_gc():

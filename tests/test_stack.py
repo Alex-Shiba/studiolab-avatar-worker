@@ -142,7 +142,8 @@ def test_engine_import_does_not_import_gpu_stack_and_matches_upstream_negative_p
     upstream = ast.parse((ROOT / "evidence/demo.py").read_text())
     negative = next(node.value.value for node in ast.walk(upstream) if isinstance(node, ast.Assign)
                     and any(isinstance(t, ast.Name) and t.id == "negative_prompt" for t in node.targets))
-    assert assignments["NEGATIVE_PROMPT"] == negative
+    # Upstream text first, then only our text words (live fake-caption finding, 2026-11-17).
+    assert assignments["NEGATIVE_PROMPT"] == negative + ", text, captions, letters, watermark, logo"
     assert assignments["MODEL_TYPE"] == "avatar-v1.6"
     assert assignments["MIX_STEPS"] == 4 and assignments["MIX_ALPHA"] == 1.0 and assignments["INFERENCE_STEPS"] == 8
     assert "save_video_ffmpeg" not in source and "job[\"seed\"]" in source
