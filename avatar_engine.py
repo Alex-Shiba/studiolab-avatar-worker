@@ -99,9 +99,9 @@ def generate(directory, context_parallel_size):
         audio_output.mkdir(exist_ok=True)
         vocal_separator = Separator(output_dir=audio_output / "vocals", output_single_stem="vocals",
                                     model_file_dir=os.path.join(checkpoint_dir, "vocal_separator"))
-        if vocal_separator.onnx_execution_provider == ["CUDAExecutionProvider"]:
-            vocal_separator.onnx_execution_provider = [
-                ("CUDAExecutionProvider", {"device_id": local_rank, "cudnn_conv_algo_search": "HEURISTIC"})]
+        # The separator is a small ONNX model: on CPU it takes seconds. onnxruntime-gpu 1.20.2's CUDA provider fails against the
+        # cuDNN 9.1 that torch 2.6 brings («Failed to initialize CUDNN Frontend», live run 2026-11-17), so it is never used here.
+        vocal_separator.onnx_execution_provider = ["CPUExecutionProvider"]
         vocal_separator.load_model("Kim_Vocal_2.onnx")
     # initialize pipeline
     pipe = LongCatVideoAvatarPipeline(

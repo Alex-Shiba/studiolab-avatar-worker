@@ -14,7 +14,7 @@ import uuid
 from aiohttp import web
 from vastai import BenchmarkConfig, HandlerConfig, LogActionConfig, Worker, WorkerConfig
 
-from boot import WORKSPACE, prepare, wait_ready
+from boot import WORKSPACE, CommandFailed, prepare, wait_ready
 from contract import MAX_BODY_BYTES
 from download import manifest
 import exam
@@ -199,7 +199,8 @@ def main():
         watchdog.cancel()
         if children and children[0].poll() is not None:
             current_stage = "proxy"
-        log_marker(f"AVATAR_FATAL {current_stage} {type(error).__name__}")
+        detail = f" {error.what} rc={error.code}" if isinstance(error, CommandFailed) else ""
+        log_marker(f"AVATAR_FATAL {current_stage} {type(error).__name__}{detail}")
         # Stop generation, but leave the proxy alive through its 10 s metrics cadence.
         stop_children(children[1:])
         time.sleep(15)

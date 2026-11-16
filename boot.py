@@ -20,10 +20,55 @@ EXCLUDED = {"torch", "torchvision", "torchaudio", "flash-attn", "libsndfile1",
             "tritonserverclient", "streamlit", "openai"}
 
 
+class CommandFailed(RuntimeError):
+    """An install command failed; `what` is its program and first argument (no paths, URLs or values)."""
+
+    def __init__(self, what, code):
+        super().__init__(what)
+        self.what, self.code = what, code
+
+
+def command_name(argv):
+    words = [Path(str(a)).name for a in argv[:4] if not str(a).startswith("-")]
+    return " ".join(words[:2])
+
+
 def command(argv, **kwargs):
-    result = subprocess.run([str(a) for a in argv], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                            check=True, timeout=1800, env=model_environment(os.environ), **kwargs)
+    result = subprocess.run([str(a) for a in argv], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            timeout=1800, env=model_environment(os.environ), **kwargs)
+    if result.returncode != 0:
+        # The children run without credentials in their environment; the tail goes to Vast's log so a failed boot is readable.
+        tail = result.stderr.decode("utf-8", errors="replace").strip().splitlines()[-12:]
+        for line in tail:
+            print("AVATAR_INSTALL_STDERR " + line[:240], flush=True)
+        raise CommandFailed(command_name(argv), result.returncode)
     return result.stdout.decode("utf-8").strip()
+
+
+def system_tools_present():
+    if any(shutil.which(binary) is None for binary in ("ffmpeg", "ffprobe", "git")):
+        return False
+    try:
+        probe = subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return b"libsndfile.so.1" in probe.stdout
+
+
+def apt_install(packages, *, tries=10, pause=15, run=None, sleep=time.sleep):
+    """apt-get with a lock wait and retries: the base image's own boot may hold the apt lock in a fresh container's first minutes."""
+    run = run or command
+    lock = ["-o", "DPkg::Lock::Timeout=120"]
+    for attempt in range(tries):
+        try:
+            run(["apt-get", *lock, "update", "-qq"])
+            run(["apt-get", *lock, "install", "-y", "-qq", *packages])
+            return
+        except CommandFailed:
+            if attempt == tries - 1:
+                raise
+            print(f"AVATAR_APT_RETRY {attempt + 1}", flush=True)
+            sleep(pause)
 
 
 def filtered_requirements(text):
@@ -46,8 +91,8 @@ def prepare(stage=lambda name: None):
     os.umask(0o077)
     root = WORKSPACE / "studiolab-avatar"
     root.mkdir(parents=True, exist_ok=True)
-    command(["apt-get", "update", "-qq"])
-    command(["apt-get", "install", "-y", "-qq", "ffmpeg", "git", "libsndfile1"])
+    if not system_tools_present():
+        apt_install(["ffmpeg", "git", "libsndfile1"])
     for binary in ("ffmpeg", "ffprobe"):
         if shutil.which(binary) is None:
             raise RuntimeError("media tools unavailable")

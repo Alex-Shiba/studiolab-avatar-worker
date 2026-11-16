@@ -27,7 +27,10 @@ def log_marker(marker):
             stream.write(marker + "\n")
     except OSError:
         # A full/broken log disk must not prevent fatal instance retirement.
-        print(marker, flush=True)
+        pass
+    # Markers carry only stage names, exception classes and numbers. The marker file dies with a self-destroyed machine, so the same
+    # line also goes to the container's output (Vast's instance log): the first live boot (2026-11-17) failed without a readable cause.
+    print(marker, flush=True)
 
 
 @dataclass
