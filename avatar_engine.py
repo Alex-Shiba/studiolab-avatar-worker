@@ -75,6 +75,15 @@ def generate(directory, context_parallel_size):
 
     # initialize context parallel
     context_parallel_util.init_context_parallel(context_parallel_size=context_parallel_size, global_rank=global_rank, world_size=num_processes)
+    sampler = None
+    if global_rank == 0:
+        import gpu_watch
+        gpu_watch.topology()
+        try:
+            gpu_watch.peer_copy(torch)
+        except Exception as error:  # a diagnostic never fails the job
+            print("AVATAR_GPU_PEER failed " + type(error).__name__, flush=True)
+        sampler = gpu_watch.Sampler().start()
     cp_rank = context_parallel_util.get_cp_rank()
     cp_size = context_parallel_util.get_cp_size()
     cp_split_hw = context_parallel_util.get_optimal_split(cp_size)
@@ -264,6 +273,8 @@ def generate(directory, context_parallel_size):
         write_progress(directory, num_segments, num_segments, stage="muxing", width=width, height=height)
         encode_frames((frame.tobytes() for frame in all_generated_frames[:generated_frame_count]),
                       raw_speech_path, directory, job["frames"], width, height)
+    if sampler is not None:
+        sampler.stop()
     dist.barrier()
     dist.destroy_process_group()
 

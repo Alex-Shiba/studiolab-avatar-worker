@@ -38,6 +38,9 @@ def engine_environment(env, python, gpus):
     result.pop("LONGCAT_A2A_WORKSPACE", None)
     if gpus > 2:
         result["LONGCAT_A2A_WORKSPACE"] = "1"
+    if gpus > 1:
+        # Which transport carries the all-to-all (P2P/NVLink, SHM or sockets): a 2×H100 machine ran 2.4–3× slow (2026-11-17).
+        result.update(NCCL_DEBUG="INFO", NCCL_DEBUG_SUBSYS="INIT,P2P,SHM,NET")
     return result
 
 
