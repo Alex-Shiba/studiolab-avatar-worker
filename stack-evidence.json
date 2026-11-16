@@ -1,0 +1,23 @@
+{
+  "image": "vastai/base-image:cuda-12.4.1-cudnn-devel-ubuntu22.04-py310-2026-10-23",
+  "docker_manifest_digest": "sha256:118dd352f706ed61eedf1e1479e73026e40a66fcc7137ed77ebbfd95d53870fe",
+  "docker_amd64_digest": "sha256:0cce984cd5360c6e671cd1707a07c41c59aede16d532eb0ea8c5887e594b3fa0",
+  "source": "https://hub.docker.com/v2/repositories/vastai/base-image/tags?page_size=100&name=cuda-12",
+  "code_commit": "58eb336edc5c8c63389838727e40b8c18434e54e",
+  "upstream_demo_sha256": "4a8abbf73385af5369399b18046325b8d322ba8a7998df34e92095d2dad21fa8",
+  "manifest_total_bytes": 63163373768,
+  "model_weight_bytes_downloaded": 0,
+  "gpu_code_executed": false,
+  "vast_calls": 0,
+  "added_accelerate": "1.10.1",
+  "runtime_exclusions": [
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "flash-attn",
+    "libsndfile1",
+    "tritonserverclient",
+    "streamlit",
+    "openai"
+  ]
+}

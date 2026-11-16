@@ -1,0 +1,407 @@
+{
+  "schema_version": 1,
+  "code": {
+    "repository": "https://github.com/meituan-longcat/LongCat-Video",
+    "commit": "58eb336edc5c8c63389838727e40b8c18434e54e",
+    "license": "MIT"
+  },
+  "files": [
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "config.json",
+      "path": "LongCat-Video/config.json",
+      "size": 37,
+      "sha256": "0121461c0aae6083e23217414ddfdd78c4ff4d088838e9c88c1f483b8c6cefd1",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "model_index.json",
+      "path": "LongCat-Video/model_index.json",
+      "size": 37,
+      "sha256": "0121461c0aae6083e23217414ddfdd78c4ff4d088838e9c88c1f483b8c6cefd1",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "scheduler/scheduler_config.json",
+      "path": "LongCat-Video/scheduler/scheduler_config.json",
+      "size": 201,
+      "sha256": "3bc8f1aa49f02f0ea23fe02f2c6a6a5a9c037c441a8345fd5938d0bcc61338e9",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "text_encoder/config.json",
+      "path": "LongCat-Video/text_encoder/config.json",
+      "size": 854,
+      "sha256": "4087b6192155a4643f6d29fd326c4610103130674011ef4d0a53f8bce5de967d",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "text_encoder/model-00001-of-00005.safetensors",
+      "path": "LongCat-Video/text_encoder/model-00001-of-00005.safetensors",
+      "size": 4972389712,
+      "sha256": "c0ef3a140898e228a3520c9adec60743d2e8e5b3d229651bb37f1a3921919f99",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "text_encoder/model-00002-of-00005.safetensors",
+      "path": "LongCat-Video/text_encoder/model-00002-of-00005.safetensors",
+      "size": 4899225672,
+      "sha256": "481c7b2b39771c44df6dd8d13ee12ed072d731b4a650bd092885d4d52db229ad",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "text_encoder/model-00003-of-00005.safetensors",
+      "path": "LongCat-Video/text_encoder/model-00003-of-00005.safetensors",
+      "size": 4966309504,
+      "sha256": "f93148bcc04052a169e1e49bfcf6125df6cf9bf243cb9c627da75266cf8e35c3",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "text_encoder/model-00004-of-00005.safetensors",
+      "path": "LongCat-Video/text_encoder/model-00004-of-00005.safetensors",
+      "size": 4999880704,
+      "sha256": "a451792c739c05bca4606190cc2dd16731411bac03b4cf6aacc5767321f857c9",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "text_encoder/model-00005-of-00005.safetensors",
+      "path": "LongCat-Video/text_encoder/model-00005-of-00005.safetensors",
+      "size": 2885866152,
+      "sha256": "7e76e18d224531b8197a46231cb53daf7f2f6ca707130252becf933026ac4eea",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "text_encoder/model.safetensors.index.json",
+      "path": "LongCat-Video/text_encoder/model.safetensors.index.json",
+      "size": 22476,
+      "sha256": "8af791f24a6447aa30c95786f40adf23d3c9df97470d2f36159c8f1113f120b4",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "tokenizer/special_tokens_map.json",
+      "path": "LongCat-Video/tokenizer/special_tokens_map.json",
+      "size": 7079,
+      "sha256": "456b58fd240a06c743a7c2cf8008bec501240d68ebd1fc4018ea569505fea270",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "tokenizer/spiece.model",
+      "path": "LongCat-Video/tokenizer/spiece.model",
+      "size": 4548313,
+      "sha256": "e3909a67b780650b35cf529ac782ad2b6b26e6d1f849d3fbb6a872905f452458",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "tokenizer/tokenizer.json",
+      "path": "LongCat-Video/tokenizer/tokenizer.json",
+      "size": 16837459,
+      "sha256": "20a46ac256746594ed7e1e3ef733b83fbc5a6f0922aa7480eda961743de080ef",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "tokenizer/tokenizer_config.json",
+      "path": "LongCat-Video/tokenizer/tokenizer_config.json",
+      "size": 61758,
+      "sha256": "1d8d2a216bf8e70ac15b7ddcea566c4dd0433c024b39a58ca5e4c66bd78defbd",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "vae/config.json",
+      "path": "LongCat-Video/vae/config.json",
+      "size": 724,
+      "sha256": "f0c1cc1d7decb5badc384f54691746a27a9aeff49f7ebca974e583389342d527",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video",
+      "revision": "03b55529b1d1d4045f5fbe14d65c8c6e8116b278",
+      "source_path": "vae/diffusion_pytorch_model.safetensors",
+      "path": "LongCat-Video/vae/diffusion_pytorch_model.safetensors",
+      "size": 507591892,
+      "sha256": "d6e524b3fffede1787a74e81b30976dce5400c4439ba64222168e607ed19e793",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "base_model/config.json",
+      "path": "LongCat-Video-Avatar-1.6/base_model/config.json",
+      "size": 854,
+      "sha256": "9ef3c403bb16bb8fdb974c4c291673740678180d0c8fa13b11da5a0db35c7b21",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "base_model/diffusion_pytorch_model-00001-of-00006.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/base_model/diffusion_pytorch_model-00001-of-00006.safetensors",
+      "size": 5038262208,
+      "sha256": "bdda91efcb20fbd04bb329b6f069f68ff97e86054ddc7034bc2d55a297abf88e",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "base_model/diffusion_pytorch_model-00002-of-00006.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/base_model/diffusion_pytorch_model-00002-of-00006.safetensors",
+      "size": 5355725552,
+      "sha256": "a94566ecbb61caa2909b5de78fc542513d9093f90b49b6805aa99f3a9539234c",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "base_model/diffusion_pytorch_model-00003-of-00006.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/base_model/diffusion_pytorch_model-00003-of-00006.safetensors",
+      "size": 5458518600,
+      "sha256": "4af3d66b9789caf0a11f4e5cb19e3298655ea4673c975cb288a34a0399c032c5",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "base_model/diffusion_pytorch_model-00004-of-00006.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/base_model/diffusion_pytorch_model-00004-of-00006.safetensors",
+      "size": 5265572392,
+      "sha256": "311e2db9d5b89beae43bb97bd91fc44ca328c8711211b84112cc52f16ca3f7ac",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "base_model/diffusion_pytorch_model-00005-of-00006.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/base_model/diffusion_pytorch_model-00005-of-00006.safetensors",
+      "size": 5353652768,
+      "sha256": "c63a0f4c31c5860325a72b50bb0c60b05666be8a7646c53096b1b9e85ec9735b",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "base_model/diffusion_pytorch_model-00006-of-00006.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/base_model/diffusion_pytorch_model-00006-of-00006.safetensors",
+      "size": 5234276864,
+      "sha256": "aa524b4d584f8de9596b8e1b9ec3f59aa4feba6b3c54bb80292692e2698cf32c",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "base_model/diffusion_pytorch_model.safetensors.index.json",
+      "path": "LongCat-Video-Avatar-1.6/base_model/diffusion_pytorch_model.safetensors.index.json",
+      "size": 153152,
+      "sha256": "bdd028207a22cb8410b29e1c85bb30bd7ed541c1c5b2b788398c405c335fdfb0",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "config.json",
+      "path": "LongCat-Video-Avatar-1.6/config.json",
+      "size": 48,
+      "sha256": "f58022248a4a3132d6ddf4c20a77ad12c84aeeb86a13c5e333f002717aa2c5af",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "loraA/lora.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/loraA/lora.safetensors",
+      "size": 2523077984,
+      "sha256": "6e0d1ce0d8b3fdfd63fbdae4c25e1bbbb286b1cb198a2ec07d4c945e883c188c",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "loraB/lora.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/loraB/lora.safetensors",
+      "size": 2523077984,
+      "sha256": "5efc11d8eaa298cfa60fa20ce8f57e894df07deff61c922166aed8f4503e660b",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "model_index.json",
+      "path": "LongCat-Video-Avatar-1.6/model_index.json",
+      "size": 48,
+      "sha256": "f58022248a4a3132d6ddf4c20a77ad12c84aeeb86a13c5e333f002717aa2c5af",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "scheduler/scheduler_config.json",
+      "path": "LongCat-Video-Avatar-1.6/scheduler/scheduler_config.json",
+      "size": 213,
+      "sha256": "853cc585fa05aadcd91dac89743db59fba6d0eb4062fb7de636a90f3fff3e969",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "vocal_separator/Kim_Vocal_2.onnx",
+      "path": "LongCat-Video-Avatar-1.6/vocal_separator/Kim_Vocal_2.onnx",
+      "size": 66759214,
+      "sha256": "ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "vocal_separator/download_checks.json",
+      "path": "LongCat-Video-Avatar-1.6/vocal_separator/download_checks.json",
+      "size": 17194,
+      "sha256": "2fcb8e7f28cc7720a59fd373e7482163a88451ecdc0034e0bc97a410b889f1df",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "vocal_separator/mdx_model_data.json",
+      "path": "LongCat-Video-Avatar-1.6/vocal_separator/mdx_model_data.json",
+      "size": 11975,
+      "sha256": "7b5bcc54884cf2a68c9857c0a3bfb0e0a86dc2d56188ced2ed7b9e17311eb0b8",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "vocal_separator/vr_model_data.json",
+      "path": "LongCat-Video-Avatar-1.6/vocal_separator/vr_model_data.json",
+      "size": 4380,
+      "sha256": "6a2021b9aa355c10f845b68c73944d47bd9e1fdf37b8a584b14ce8f88b09bb2f",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/added_tokens.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/added_tokens.json",
+      "size": 34648,
+      "sha256": "3c51f66c4c21f9e126970078f11ae77a78c74aee8df606ee9daba86e467108e0",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/config.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/config.json",
+      "size": 1272,
+      "sha256": "ad0e8d1e46f4d01f7861a21509e5d0f977d6cc1f367a370603c92541d819807b",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/generation_config.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/generation_config.json",
+      "size": 3903,
+      "sha256": "fbdfa70135de9b1d31553393f14e80aaeb1936ea36576b2ba864055943c09d23",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/merges.txt",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/merges.txt",
+      "size": 493869,
+      "sha256": "2df2990a395e35e8dfbc7511e08c12d56018d8d04691e0133e5d63b21e154dc6",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/model.safetensors",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/model.safetensors",
+      "size": 3087130976,
+      "sha256": "a8e94b85976e5864ba3e9525c7e6c83b2a1eca42d4b797a0c7c24d778e40fd95",
+      "hash_source": "Hub LFS oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/normalizer.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/normalizer.json",
+      "size": 52666,
+      "sha256": "bf1c507dc8724ca9cf9903640dacfb69dae2f00edee4f21ceba106a7392f26dd",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/preprocessor_config.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/preprocessor_config.json",
+      "size": 340,
+      "sha256": "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/special_tokens_map.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/special_tokens_map.json",
+      "size": 2072,
+      "sha256": "1c70773c078cb2ca96e0fcff113102f1d3e2b1504272c3bb63b035d4a6700d87",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/tokenizer.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/tokenizer.json",
+      "size": 2480617,
+      "sha256": "6d8cbd7cd0d8d5815e478dac67b85a26bbe77c1f5e0c6d76d1ce2abc0e5f21ca",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/tokenizer_config.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/tokenizer_config.json",
+      "size": 282843,
+      "sha256": "844b642c73a91359722f47b35705f7174686df33d252695d8572cf9ac03a6389",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    },
+    {
+      "repository": "meituan-longcat/LongCat-Video-Avatar-1.6",
+      "revision": "acfc628244201fc53fb6fe8a8903c5bac9bdf68f",
+      "source_path": "whisper-large-v3/vocab.json",
+      "path": "LongCat-Video-Avatar-1.6/whisper-large-v3/vocab.json",
+      "size": 1036558,
+      "sha256": "e2aa043ef015641d363d8288e7c241c85e36a5c761fb303598e0710233344387",
+      "hash_source": "SHA-256 of textual Git blob, verified against Hub oid"
+    }
+  ],
+  "total_bytes": 63163373768
+}

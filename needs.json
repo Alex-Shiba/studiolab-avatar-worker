@@ -1,0 +1,32 @@
+{
+  "project": "studiolab",
+  "status": "ready_for_conductor_review",
+  "needs": [
+    {
+      "id": "opus-review",
+      "action": "Провести независимый Opus-review всего avatar-worker перед показом владельцу и публикацией.",
+      "reason": "Opus недоступен в инструментах исполнителя; независимая проверка здесь не заявляется."
+    },
+    {
+      "id": "publish-repository",
+      "action": "Опубликовать содержимое avatar-worker отдельным публичным deployment-репозиторием, с worker.py и requirements.txt в корне. Закрепить полный commit в PYWORKER_REF.",
+      "constraints": "Исполнитель не делал commit/push. Не включать .tmp, credentials, пользовательские входы, базы данных или скачанные веса."
+    },
+    {
+      "id": "vast-template",
+      "action": "Создать шаблон из README: выбранный py310 CUDA 12.4.1 образ, SDK 1.8.3, TLS, только 3000, диск от 200 GB (лучше 240), RAM от 128 GB, AVATAR_* настройки.",
+      "image": "vastai/base-image:cuda-12.4.1-cudnn-devel-ubuntu22.04-py310-2026-10-23",
+      "forbidden_public_ports": [3001, 18001]
+    },
+    {
+      "id": "endpoints",
+      "action": "Настроить studiolab-avatar для 2×H100 SXM и studiolab-avatar-b для 1×H100 SXM, cuda_max_good >= 12.4, max_workers=1, без резервных простаивающих машин. Проверить единицы RAM/диска и согласовать inactivity_timeout с опросом студии."
+    },
+    {
+      "id": "live-take",
+      "action": "Выполнить согласованный живой дубль через маршрут студии: сначала 480p, затем 720p, несколько сегментов, исходный голос, повтор request, state/file, idle-самоудаление и fatal-ветку.",
+      "measure": ["cold start", "download speed", "RAM/VRAM", "cuDNN 9 CUDA provider", "NCCL/context parallel", "exec_s", "lip sync", "60-second clip", "process cleanup", "MP4/AAC duration"],
+      "constraint": "GPU-испытания и Vast-вызовы не входят в выполненную локальную работу; платные вызовы сверх дневного лимита ждут отдельного «да» владельца."
+    }
+  ]
+}
