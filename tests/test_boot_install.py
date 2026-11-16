@@ -57,7 +57,19 @@ def test_install_environment_drops_image_pip_settings():
     env = {"PATH": "/usr/bin", "PIP_INDEX_URL": "https://mirror.invalid/simple", "pip_extra_index_url": "x", "UV_INDEX_URL": "y",
            "VAST_API_KEY": "fake-secret-value", "HOME": "/root"}
     result = boot.install_environment(env)
-    assert result["PATH"] == "/usr/bin" and result["HOME"] == "/root"
+    assert "/usr/bin" in result["PATH"].split(boot.os.pathsep) and result["HOME"] == "/root"
     assert not any(name.upper().startswith(("PIP_INDEX", "PIP_EXTRA", "UV_")) for name in result)
     assert "VAST_API_KEY" not in result
     assert result["PIP_CONFIG_FILE"] == boot.os.devnull
+
+
+def test_install_environment_drops_the_sdk_venv():
+    sep = boot.os.pathsep
+    env = {"PATH": sep.join(["/workspace/worker-env/bin", "/venv/main/bin", "/usr/bin", "/opt/x"]), "PYTHONPATH": "/workspace/worker-env/lib",
+           "VIRTUAL_ENV": "/workspace/worker-env", "CONDA_PREFIX": "/venv", "HOME": "/root"}
+    result = boot.install_environment(env)
+    assert "PYTHONPATH" not in result and "VIRTUAL_ENV" not in result and "CONDA_PREFIX" not in result
+    parts = result["PATH"].split(sep)
+    assert parts[0] == "/usr/local/sbin" and "/opt/x" in parts and not any("venv" in p or "worker-env" in p for p in parts)
+    assert result["PYTHONNOUSERSITE"] == "1"
+    assert boot.leaky_names(env) == ["CONDA_PREFIX", "PYTHONPATH", "VIRTUAL_ENV"]

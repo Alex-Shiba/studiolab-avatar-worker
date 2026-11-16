@@ -33,12 +33,24 @@ def command_name(argv):
     return " ".join(words[:2])
 
 
+LEAKY_PREFIXES = ("PIP_", "UV_", "PYTHON", "CONDA", "VIRTUAL_ENV")
+
+
 def install_environment(env):
-    """The image's own pip settings never reach our installs: on Vast's serverless container pip looked at an index without
-    flit_core («from versions: none», live boot 2026-11-17) while the same image over ssh used PyPI. Indexes are named per call."""
-    result = {name: value for name, value in model_environment(env).items() if not name.upper().startswith(("PIP_", "UV_"))}
-    result["PIP_CONFIG_FILE"] = os.devnull
+    """Our installs see neither the image's pip settings nor the SDK venv the worker itself runs in: on Vast's serverless
+    container a build-dependency pip saw no flit_core («from versions: none», live boots 2026-11-17, also with PyPI named)
+    while the same image over ssh installed fine. Indexes are named per call; PATH keeps only system directories first."""
+    result = {name: value for name, value in model_environment(env).items() if not name.upper().startswith(LEAKY_PREFIXES)}
+    system = ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"]
+    rest = [p for p in result.get("PATH", "").split(os.pathsep) if p and p not in system and "venv" not in p and "worker-env" not in p]
+    result["PATH"] = os.pathsep.join([*system, *rest])
+    result.update(PIP_CONFIG_FILE=os.devnull, PYTHONNOUSERSITE="1", PIP_DISABLE_PIP_VERSION_CHECK="1")
     return result
+
+
+def leaky_names(env):
+    """Names only (never values) of the variables install_environment removes, for Vast's log."""
+    return sorted(name for name in env if name.upper().startswith(LEAKY_PREFIXES))
 
 
 def command(argv, **kwargs):
@@ -46,7 +58,7 @@ def command(argv, **kwargs):
                             timeout=1800, env=install_environment(os.environ), **kwargs)
     if result.returncode != 0:
         # The children run without credentials in their environment; the tail goes to Vast's log so a failed boot is readable.
-        tail = result.stderr.decode("utf-8", errors="replace").strip().splitlines()[-12:]
+        tail = result.stderr.decode("utf-8", errors="replace").strip().splitlines()[-40:]
         for line in tail:
             print("AVATAR_INSTALL_STDERR " + line[:240], flush=True)
         raise CommandFailed(command_name(argv), result.returncode)
@@ -99,6 +111,7 @@ def prepare(stage=lambda name: None):
     os.umask(0o077)
     root = WORKSPACE / "studiolab-avatar"
     root.mkdir(parents=True, exist_ok=True)
+    print("AVATAR_INSTALL_ENV_NAMES " + " ".join(leaky_names(os.environ)), flush=True)
     if not system_tools_present():
         apt_install(["ffmpeg", "git", "libsndfile1"])
     for binary in ("ffmpeg", "ffprobe"):
@@ -115,7 +128,7 @@ def prepare(stage=lambda name: None):
     environment = root / "venv-py310"
     python = environment / "bin/python"
     if not python.exists():
-        command(["python3.10", "-m", "venv", environment])
+        command(["/usr/bin/python3.10" if Path("/usr/bin/python3.10").exists() else "python3.10", "-m", "venv", environment])
     command([python, "-c", "import sys; assert sys.version_info[:2] == (3, 10)"])
     pip = [python, "-m", "pip", "install", "--disable-pip-version-check"]
     command([*pip, "--index-url", "https://download.pytorch.org/whl/cu124",
