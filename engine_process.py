@@ -44,7 +44,11 @@ def engine_environment(env, python, gpus):
         result["LONGCAT_A2A_WORKSPACE"] = "1"
     if gpus > 1:
         # Which transport carries the all-to-all: a 2xH100 machine ran 2.4-3x slow (2026-11-17).
-        result.update(NCCL_DEBUG="INFO", NCCL_DEBUG_SUBSYS="INIT,P2P,SHM,NET")
+        # INFO flooded the resident engine's log with per-connection lines (live, 2026-11-17): transport lines only on demand.
+        if env.get("AVATAR_NCCL_DEBUG") == "1":
+            result.update(NCCL_DEBUG="INFO", NCCL_DEBUG_SUBSYS="INIT,P2P,SHM,NET")
+        else:
+            result.update(NCCL_DEBUG="WARN")
     return result
 
 

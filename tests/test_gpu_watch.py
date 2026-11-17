@@ -29,4 +29,6 @@ def test_nccl_transport_logging_only_with_several_gpus():
     one = engine_process.engine_environment({"PATH": "/usr/bin"}, "/w/venv/bin/python", 1)
     two = engine_process.engine_environment({"PATH": "/usr/bin"}, "/w/venv/bin/python", 2)
     assert "NCCL_DEBUG" not in one
-    assert two["NCCL_DEBUG"] == "INFO" and two["NCCL_DEBUG_SUBSYS"] == "INIT,P2P,SHM,NET"
+    assert two["NCCL_DEBUG"] == "WARN" and "NCCL_DEBUG_SUBSYS" not in two
+    loud = engine_process.engine_environment({"PATH": "/usr/bin", "AVATAR_NCCL_DEBUG": "1"}, "/w/venv/bin/python", 2)
+    assert loud["NCCL_DEBUG"] == "INFO" and loud["NCCL_DEBUG_SUBSYS"] == "INIT,P2P,SHM,NET"
