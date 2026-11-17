@@ -52,3 +52,13 @@ def payload(**overrides):
 
 def connector():
     return aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+
+
+@pytest.fixture(autouse=True)
+async def close_fake_engines():
+    from test_engine import FAKE_BACKENDS
+    try:
+        yield
+    finally:
+        while FAKE_BACKENDS:
+            await FAKE_BACKENDS.pop().close()

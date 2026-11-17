@@ -9,15 +9,11 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from media import encode_frames, write_progress
+from media import encode_frames, mix_audio, write_progress
+from resident_protocol import atomic_json, wait_job
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--job", type=Path, required=True)
-    args = parser.parse_args()
-    directory = args.job
-    spec = json.loads((directory / "job.json").read_text())
+def generate(directory, spec):
     mode = os.environ.get("AVATAR_TEST_MODE", "normal")
     (directory / "entered").touch()
     if mode == "tree":
@@ -36,8 +32,27 @@ def main():
     write_progress(directory, spec["segments"], spec["segments"], stage="muxing", width=32, height=24)
     # More generated frames than the voice: the production writer must trim them.
     frame = bytes((25, 60, 90)) * (32 * 24)
-    encode_frames(iter([frame] * (spec["frames"] + 80)), directory / "audio.input",
+    audio = (mix_audio(directory / "audio1.input", directory / "audio2.input", directory, spec["duration"])
+             if spec.get("mode") == "dialog" else directory / "audio.input")
+    encode_frames(iter([frame] * (spec["frames"] + 80)), audio,
                   directory, spec["frames"], 32, 24)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inbox", type=Path, required=True)
+    args = parser.parse_args()
+    inbox = args.inbox
+    time.sleep(float(os.environ.get("AVATAR_TEST_LOAD_DELAY", "0")))
+    if os.environ.get("AVATAR_TEST_LOAD_CRASH") == "1":
+        raise SystemExit(1)
+    atomic_json(inbox / "ready.json", {"attention": "fa3", "compiled": True})
+    while True:
+        request = wait_job(inbox, interval=.05)
+        directory = Path(request["directory"])
+        generate(directory, request["job"])
+        atomic_json(directory / "completion.json", {"token": request["token"]})
+        (inbox / "active.json").unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

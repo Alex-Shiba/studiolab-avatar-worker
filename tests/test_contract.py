@@ -120,11 +120,11 @@ def test_image_orientation_and_16bit_gray(tmp_path):
         assert result.getpixel((0, 0))[0] in (127, 128)
 
 
-@pytest.mark.parametrize("duration,segments,frames", [(2, 1, 50), (3.72, 1, 93), (3.73, 2, 93),
-    (4.1, 2, 103), (6.92, 2, 173), (10.12, 3, 253), (10.14, 4, 254), (60, 19, 1500)])
+@pytest.mark.parametrize("duration,segments,frames", [(2, 1, 50), (3.72, 1, 93), (3.73, 1, 93),
+    (3.82, 1, 96), (3.83, 2, 96), (4.1, 2, 103), (6.92, 2, 173), (10.12, 3, 253), (10.14, 3, 254), (60, 19, 1500)])
 def test_segment_arithmetic(duration, segments, frames):
     assert segment_count(duration) == segments and frame_count(duration) == frames
-    assert 93 + (segments - 1) * 80 >= frames
+    assert 93 + (segments - 1) * 80 + 3 >= frames
 
 
 def test_fingerprint_covers_all_content_but_not_request(tmp_path):

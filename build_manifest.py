@@ -61,6 +61,9 @@ def main():
     result = {"schema_version": 1, "code": {
         "repository": "https://github.com/meituan-longcat/LongCat-Video",
         "commit": CODE_COMMIT, "license": "MIT"},
+        "flash_attention": {"repository": "https://github.com/Dao-AILab/flash-attention",
+                            "commit": "060c9188beec3a8b62b33a3bfa6d5d2d44975fab",
+                            "subdirectory": "hopper", "version": "2.8.3"},
         "files": files, "total_bytes": sum(f["size"] for f in files)}
     (ROOT / "model-manifest.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(f"{len(files)} files; {result['total_bytes']} bytes; no LFS objects downloaded")

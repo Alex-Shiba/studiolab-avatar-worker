@@ -22,7 +22,7 @@ MAX_IMAGE_PIXELS = 16_777_216
 MAX_IMAGE_EDGE = 8192
 MAX_AUDIO_BYTES = 24 * 1024 * 1024
 MAX_AUDIO_BASE64 = 4 * ((MAX_AUDIO_BYTES + 2) // 3)
-MAX_BODY_BYTES = MAX_IMAGE_BASE64 + MAX_AUDIO_BASE64 + 65536
+MAX_BODY_BYTES = MAX_IMAGE_BASE64 + 2 * MAX_AUDIO_BASE64 + 65536
 # Finished records and files share the video worker's one-hour retention.
 TTL_S = 3600
 ID_PATTERN = re.compile(r"[0-9a-f]{32}\Z")
@@ -93,7 +93,7 @@ def validate_id(payload):
 
 def segment_count(duration):
     # Decimal arithmetic avoids a spurious continuation at an exact boundary.
-    extra = max(Decimal(0), Decimal(str(duration)) - Decimal("3.72"))
+    extra = max(Decimal(0), Decimal(str(duration)) - Decimal("3.72") - Decimal("0.10"))
     return 1 + int((extra / Decimal("3.2")).to_integral_value(rounding=ROUND_CEILING))
 
 
@@ -115,19 +115,28 @@ class ClipRequest:
     size: str
     seed: int
     image: InputImage
-    audio: InputAudio
+    audio: InputAudio | None = None
+    audio1: InputAudio | None = None
+    audio2: InputAudio | None = None
+    boxes: dict | None = None
+
+    @property
+    def duration(self):
+        return self.audio.duration if self.mode == "avatar" else max(self.audio1.duration, self.audio2.duration)
 
     @property
     def frames(self):
-        return frame_count(self.audio.duration)
+        return frame_count(self.duration)
 
     @property
     def segments(self):
-        return segment_count(self.audio.duration)
+        return segment_count(self.duration)
 
     def fingerprint(self):
         fields = {key: getattr(self, key) for key in ("mode", "prompt", "size", "seed")}
-        for key in ("image", "audio"):
+        if self.mode == "dialog":
+            fields["boxes"] = self.boxes
+        for key in (("image", "audio1", "audio2") if self.mode == "dialog" else ("image", "audio")):
             fields[key] = hashlib.sha256(getattr(self, key).data).hexdigest()
         return hashlib.sha256(json.dumps(fields, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
 
@@ -169,7 +178,7 @@ def probe_audio(path):
         raise Invalid("invalid audio file") from None
 
 
-def decode_audio(encoded, directory):
+def decode_audio(encoded, directory, name="audio.input"):
     if not isinstance(encoded, str) or not 1 <= len(encoded) <= MAX_AUDIO_BASE64:
         raise Invalid("invalid audio encoding or size")
     try:
@@ -179,26 +188,46 @@ def decode_audio(encoded, directory):
     if not raw or len(raw) > MAX_AUDIO_BYTES:
         raise Invalid("audio exceeds 24 MiB")
     # A caller-owned private job folder, never a client path or system-wide temp.
-    path = Path(directory) / "audio.input"
+    path = Path(directory) / name
     path.write_bytes(raw)
     return InputAudio(raw, probe_audio(path))
 
 
 def validate_start(payload, directory):
-    required = {"request", "mode", "prompt", "size", "seed", "image", "audio"}
-    if not isinstance(payload, dict) or set(payload) != required:
+    if not isinstance(payload, dict) or "mode" not in payload:
+        raise Invalid("missing or unknown keys")
+    mode = payload.get("mode")
+    if type(mode) is not str or mode not in ("avatar", "dialog"):
+        raise Invalid("invalid mode")
+    required = {"request", "mode", "prompt", "size", "seed", "image"}
+    required |= {"audio"} if mode == "avatar" else {"audio1", "audio2"}
+    allowed = required | ({"boxes"} if mode == "dialog" else set())
+    if not required <= set(payload) <= allowed:
         raise Invalid("missing or unknown keys")
     validate_id({"id": payload["request"]})
-    if type(payload["mode"]) is not str or payload["mode"] != "avatar":
-        raise Invalid("invalid mode")
     if type(payload["prompt"]) is not str or not 1 <= len(payload["prompt"]) <= 2000:
         raise Invalid("prompt must contain 1 to 2000 characters")
     if type(payload["size"]) is not str or payload["size"] not in ("480p", "720p"):
         raise Invalid("invalid size")
     if type(payload["seed"]) is not int or not 0 <= payload["seed"] <= 2147483647:
         raise Invalid("invalid seed")
+    boxes = validate_boxes(payload["boxes"]) if "boxes" in payload else None
     image = decode_image(payload["image"])
-    audio = decode_audio(payload["audio"], directory)
+    audios = {key: decode_audio(payload[key], directory, key + ".input")
+              for key in (("audio",) if mode == "avatar" else ("audio1", "audio2"))}
     save_image(image, Path(directory) / "image.png")
     return ClipRequest(**{key: payload[key] for key in ("request", "mode", "prompt", "size", "seed")},
-                       image=image, audio=audio)
+                       image=image, boxes=boxes, **audios)
+
+
+def validate_boxes(boxes):
+    if not isinstance(boxes, dict) or set(boxes) != {"person1", "person2"}:
+        raise Invalid("invalid boxes")
+    result = {}
+    for person, box in boxes.items():
+        if (not isinstance(box, list) or len(box) != 4
+                or any(type(n) not in (int, float) or not 0 <= n <= 1 or not math.isfinite(n) for n in box)
+                or not (box[0] < box[2] and box[1] < box[3])):
+            raise Invalid("invalid boxes")
+        result[person] = [float(n) for n in box]
+    return result

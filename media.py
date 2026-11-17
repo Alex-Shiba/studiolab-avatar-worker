@@ -7,6 +7,40 @@ import subprocess
 
 from contract import FPS
 from diagnostics import model_environment
+from resident_protocol import atomic_json
+
+
+def bounded_frames(frames, count):
+    """Trim excess frames or hold the last frame for at most three missing frames."""
+    iterator = iter(frames)
+    last, held = None, 0
+    for _ in range(count):
+        try:
+            last = next(iterator)
+        except StopIteration:
+            held += 1
+            if last is None or held > 3:
+                raise ValueError("video tail exceeds three frames") from None
+        yield last
+
+
+def mix_audio(audio1, audio2, directory, duration):
+    """Mix the original tracks from t=0, pad to the longer one, and limit their sum."""
+    output = Path(directory) / "mixed.wav"
+    filters = (
+        f"[0:a]asetpts=PTS-STARTPTS,apad,atrim=duration={duration}[a];"
+        f"[1:a]asetpts=PTS-STARTPTS,apad,atrim=duration={duration}[b];"
+        "[a][b]amix=inputs=2:duration=longest:normalize=0,"
+        "alimiter=limit=0.95:level=false:latency=true[out]")
+    subprocess.run([
+        "ffmpeg", "-nostdin", "-v", "error", "-y",
+        "-protocol_whitelist", "file,pipe", "-i", str(audio1),
+        "-protocol_whitelist", "file,pipe", "-i", str(audio2),
+        "-filter_complex", filters, "-map", "[out]", "-ar", "48000", "-ac", "2",
+        "-c:a", "pcm_f32le", "-map_metadata", "-1", str(output)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=120,
+        env=model_environment(os.environ))
+    return output
 
 
 def encode_frames(frames, original_audio, directory, count, width, height):
@@ -20,9 +54,7 @@ def encode_frames(frames, original_audio, directory, count, width, height):
         "-preset", "fast", "-pix_fmt", "yuv420p", "-map_metadata", "-1", str(silent)],
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
     try:
-        iterator = iter(frames)
-        for _ in range(count):
-            frame = next(iterator)
+        for frame in bounded_frames(frames, count):
             if len(frame) != width * height * 3:
                 raise ValueError("invalid RGB frame")
             process.stdin.write(frame)
@@ -70,7 +102,4 @@ def write_progress(directory, completed, segments, *, stage=None, width=None, he
              "stage": stage or f"segment {completed}/{segments}"}
     if width is not None and height is not None:
         value.update(width=width, height=height)
-    path = Path(directory) / "progress.json"
-    pending = path.with_suffix(".pending")
-    pending.write_text(json.dumps(value), encoding="utf-8")
-    pending.replace(path)
+    atomic_json(Path(directory) / "progress.json", value)

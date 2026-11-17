@@ -14,14 +14,17 @@ from media import encode_frames, video_info
 from conftest import audio_bytes
 
 FAKE = Path(__file__).with_name("fake_engine.py").resolve()
+FAKE_BACKENDS = []
 
 
 def fake_command(python, directory, gpus):
-    return [sys.executable, str(FAKE), "--job", str(directory)]
+    return [sys.executable, str(FAKE), "--inbox", str(directory)]
 
 
 def fake_backend(**kwargs):
-    return EngineBackend(gpus=2, command=fake_command, **kwargs)
+    backend = EngineBackend(gpus=2, command=fake_command, **kwargs)
+    FAKE_BACKENDS.append(backend)
+    return backend
 
 
 def job_files(directory, duration=2):
@@ -70,7 +73,8 @@ async def test_fake_process_progress_and_real_mp4(tmp_path):
     assert output == tmp_path / "result.mp4"
     assert video_info(output) == {"width": 32, "height": 24, "frames": 50}
     assert updates[0]["stage"] == "loading" and any(v.get("stage") == "segment 1/1" for v in updates)
-    assert backend.healthy and backend.process is None
+    assert backend.healthy and backend.process is not None
+    await backend.close()
 
 
 async def test_timeout_kills_process_group_and_next_job_recovers(tmp_path):
@@ -81,10 +85,12 @@ async def test_timeout_kills_process_group_and_next_job_recovers(tmp_path):
     pids = json.loads((tmp_path / "pids.json").read_text())
     assert len(pids) == 2
     assert not any(psutil.pid_exists(pid) and live(psutil.Process(pid)) for pid in pids)
-    assert backend.healthy and backend.process is None
+    assert backend.healthy and backend.process is not None
     backend.env["AVATAR_TEST_MODE"] = "normal"
     backend.timeout = 15
+    await backend.restart()
     assert (await backend.render(spec, tmp_path, lambda v: None)).is_file()
+    await backend.close()
 
 
 async def test_cancel_kills_child_tree(tmp_path):
@@ -101,7 +107,8 @@ async def test_cancel_kills_child_tree(tmp_path):
     with pytest.raises(asyncio.CancelledError):
         await task
     assert not any(psutil.pid_exists(pid) and live(psutil.Process(pid)) for pid in pids)
-    assert backend.healthy
+    assert backend.tree_safe
+    await backend.close()
 
 
 def test_untrusted_progress_is_bounded(tmp_path):

@@ -54,8 +54,13 @@ def leaky_names(env):
 
 
 def command(argv, **kwargs):
+    env = install_environment(kwargs.pop("env", os.environ))
+    venv_bin = kwargs.pop("venv_bin", None)
+    if venv_bin is not None:
+        # Explicitly chosen worker venv, after removing all inherited SDK venv paths.
+        env["PATH"] = str(venv_bin) + os.pathsep + env["PATH"]
     result = subprocess.run([str(a) for a in argv], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            timeout=1800, env=install_environment(os.environ), **kwargs)
+                            timeout=1800, env=env, **kwargs)
     if result.returncode != 0:
         # The children run without credentials in their environment; the tail goes to Vast's log so a failed boot is readable.
         tail = result.stderr.decode("utf-8", errors="replace").strip().splitlines()[-40:]
@@ -103,6 +108,42 @@ def filtered_requirements(text):
     return "\n".join(kept) + "\n"
 
 
+def fa3_jobs(cores, available_bytes):
+    # Keep 8 GiB for the interpreter/linker and budget 4 GiB per nvcc worker.
+    return max(1, min(64, cores or 1, int(available_bytes // (1024 ** 3) - 8) // 4))
+
+
+def install_fa3(root, python):
+    import psutil
+    pin = manifest()["flash_attention"]
+    source = root / "flash-attention"
+    available = False
+    try:
+        if not source.exists():
+            command(["git", "clone", "--filter=blob:none", "--no-checkout", pin["repository"], source])
+        command(["git", "-C", source, "checkout", "--detach", pin["commit"]])
+        if command(["git", "-C", source, "rev-parse", "HEAD"]) != pin["commit"]:
+            raise RuntimeError("FA3 commit mismatch")
+        command(["git", "-C", source, "diff", "--exit-code", "HEAD", "--"])
+        command([python, "-m", "pip", "install", "--index-url", "https://pypi.org/simple",
+                 "setuptools==75.8.0", "wheel==0.45.1", "ninja==1.11.1.3", "packaging==24.2", "einops==0.8.0"])
+        env = {key: value for key, value in os.environ.items() if not key.startswith("FLASH_ATTENTION_")}
+        for feature in ("BACKWARD", "SPLIT", "PAGEDKV", "APPENDKV", "LOCAL", "SOFTCAP", "FP16", "FP8",
+                        "HDIM64", "HDIM96", "HDIM192", "HDIM256"):
+            env["FLASH_ATTENTION_DISABLE_" + feature] = "TRUE"
+        env["MAX_JOBS"] = str(fa3_jobs(os.cpu_count(), psutil.virtual_memory().available))
+        print("AVATAR_FA3 build jobs=" + env["MAX_JOBS"], flush=True)
+        command([python, "setup.py", "install"], cwd=source / "hopper", env=env, venv_bin=python.parent)
+        command([python, "-c", "import torch; import flash_attn_interface"])
+        available = True
+        print("AVATAR_FA3 installed", flush=True)
+    except Exception as error:
+        # FA2 remains installed, including when an older FA3 package survives a failed rebuild.
+        print("AVATAR_FA3 off " + type(error).__name__, flush=True)
+    (root / "fa3-status.json").write_text(json.dumps({"available": available, "commit": pin["commit"]}), encoding="utf-8")
+    return available
+
+
 def prepare(stage=lambda name: None):
     stage("install")
     import sys
@@ -134,6 +175,7 @@ def prepare(stage=lambda name: None):
     command([*pip, "--index-url", "https://download.pytorch.org/whl/cu124",
              "torch==2.6.0+cu124", "torchvision==0.21.0+cu124", "torchaudio==2.6.0+cu124"])
     command([*pip, "--index-url", "https://pypi.org/simple", "--no-deps", "--only-binary=:all:", FLASH_WHEEL])
+    install_fa3(root, python)
     requirements = root / "upstream-filtered.txt"
     requirements.write_text("".join(filtered_requirements((source / name).read_text())
                                     for name in ("requirements.txt", "requirements_avatar.txt")), encoding="utf-8")

@@ -182,7 +182,7 @@ def main():
                      "AVATAR_MACHINE": exam.public(facts), "PYTHONUNBUFFERED": "1"}
         stage("server")
         launch([sys.executable, str(Path(__file__).with_name("server.py"))], child_env)
-        wait_ready("http://127.0.0.1:18001/health", children, timeout=60)
+        wait_ready("http://127.0.0.1:18001/health", children, timeout=1260)
         log_marker("AVATAR_READY")
         (runtime / "ready").touch(mode=0o600)
         watchdog.cancel()

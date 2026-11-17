@@ -55,7 +55,8 @@ async def test_queue_one_running_two_waiting_and_real_file(app_client):
     gate.touch()
     done = await wait_state(http, third, "done")
     assert done == {"state": "done", "progress": 1.0, "stage": "done", "fps": 25,
-                    "width": 32, "height": 24, "frames": 50, "segments": 1, "gpus": 2, "exec_s": 0.0}
+                    "width": 32, "height": 24, "frames": 50, "segments": 1, "gpus": 2, "exec_s": 0.0,
+                    "attention": "fa3", "compiled": True}
     assert all(manager.jobs[i].state == "done" for i in (first, second))
     assert manager.active == manager.retirement.jobs == 0
     directory = manager.jobs[first].directory
@@ -110,6 +111,7 @@ async def test_expiry_exact_boundary_request_reusable_and_fetch_lease(app_client
 async def test_failed_job_is_clean_and_next_job_usable(app_client):
     http, manager, backend, now, gate = app_client
     backend.env["AVATAR_TEST_MODE"] = "failure"
+    await backend.restart()
     first = await start(http)
     failed = await wait_state(http, first, "failed")
     assert failed["error"] == "generation failed" and "exec_s" not in failed
@@ -117,12 +119,50 @@ async def test_failed_job_is_clean_and_next_job_usable(app_client):
     assert (await http.post("/clip/file", json={"id": first})).status == 409
     assert backend.healthy
     backend.env["AVATAR_TEST_MODE"] = "normal"
+    await backend.restart()
     gate.touch()
     second = await start(http)
     await wait_state(http, second, "done")
     now[0] += TTL_S
     manager.expire()
     assert first not in manager.jobs and second not in manager.jobs
+
+
+async def test_engine_crash_preserves_two_queued_jobs(app_client):
+    http, manager, backend, _, gate = app_client
+    first = await start(http)
+    await wait_state(http, first, "running")
+    second, third = await start(http), await start(http)
+    old_pid = backend.process.pid
+    backend.process.kill()
+    await wait_state(http, first, "failed")
+    assert backend.healthy and backend.process.pid != old_pid
+    assert manager.jobs[second].state in ("queued", "running")
+    assert manager.jobs[third].state == "queued"
+    gate.touch()
+    await wait_state(http, second, "done")
+    await wait_state(http, third, "done")
+
+
+async def test_dialog_http_roundtrip_and_idempotence(app_client):
+    from test_revision2 import dialog_payload
+    http, manager, _, _, gate = app_client
+    body = dialog_payload()
+    response = await http.post("/clip/start", json=body)
+    assert response.status == 200
+    job_id = (await response.json())["id"]
+    repeat = await http.post("/clip/start", json=body)
+    assert (await repeat.json())["id"] == job_id
+    changed = {**body, "boxes": {"person1": [0, 0, .5, 1], "person2": [.5, 0, 1, 1]}}
+    assert (await http.post("/clip/start", json=changed)).status == 409
+    gate.touch()
+    state = await wait_state(http, job_id, "done")
+    assert state["frames"] == 96 and state["segments"] == 1
+    assert state["attention"] == "fa3" and state["compiled"] is True and state["gpus"] == 2
+    assert list(manager.jobs[job_id].directory.iterdir()) == [manager.jobs[job_id].file]
+    response = await http.post("/clip/file", json={"id": job_id})
+    assert response.status == 200 and response.content_type == "video/mp4"
+    assert await response.read()
 
 
 async def test_health_retirement_and_running_ttl(app_client):

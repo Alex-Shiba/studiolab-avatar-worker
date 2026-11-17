@@ -45,6 +45,8 @@ class Job:
     frames: int | None = None
     segments: int | None = None
     gpus: int | None = None
+    attention: str | None = None
+    compiled: bool | None = None
     exec_s: float | None = None
     error: str | None = None
     finished_at: float | None = None
@@ -54,7 +56,7 @@ class Job:
 
     def public(self):
         result = {"state": self.state, "progress": self.progress, "stage": self.stage, "fps": FPS}
-        for key in ("width", "height", "frames", "segments", "gpus", "exec_s", "error"):
+        for key in ("width", "height", "frames", "segments", "gpus", "attention", "compiled", "exec_s", "error"):
             value = getattr(self, key)
             if value is not None:
                 result[key] = value
@@ -96,12 +98,13 @@ class JobManager:
             return None
         job_id = uuid.uuid4().hex
         directory = self.root / job_id
-        spec = {"prompt": clip.prompt, "size": clip.size, "seed": clip.seed,
-                "frames": clip.frames, "segments": clip.segments, "duration": clip.audio.duration}
+        spec = {"mode": clip.mode, "prompt": clip.prompt, "size": clip.size, "seed": clip.seed,
+                "frames": clip.frames, "segments": clip.segments, "duration": clip.duration, "boxes": clip.boxes}
         (prepared / "job.json").write_text(json.dumps(spec, ensure_ascii=True), encoding="utf-8")
         prepared.rename(directory)
         job = Job(job_id, directory, frames=clip.frames, segments=clip.segments,
-                  gpus=getattr(self.backend, "gpus", 1), request=clip.request)
+                  gpus=getattr(self.backend, "gpus", 1), request=clip.request,
+                  **getattr(self.backend, "state", {}))
         self.jobs[job_id] = job
         self.requests[clip.request] = (clip.fingerprint(), job_id)
         self.active += 1
@@ -126,11 +129,13 @@ class JobManager:
     async def run(self):
         while True:
             job, spec = await self.queue.get()
+            while not self.backend.healthy:
+                await asyncio.sleep(.25)
             started = self.clock()
             job.state, job.stage = "running", "loading"
 
             def progress(update):
-                for key in ("stage", "gpus", "width", "height", "frames"):
+                for key in ("stage", "gpus", "width", "height", "frames", "attention", "compiled"):
                     if key in update:
                         setattr(job, key, update[key])
                 job.progress = max(job.progress, min(1.0, update.get("progress", job.progress)))
@@ -146,9 +151,9 @@ class JobManager:
             except Exception:
                 job.state, job.stage, job.error = "failed", "failed", "generation failed"
             finally:
-                # Teardown in render finishes before private inputs are removed.
+                # Completion from all ranks (or teardown) precedes input removal.
                 # If an OS process cannot be killed, retain its directory until retirement.
-                if self.backend.healthy:
+                if getattr(self.backend, "tree_safe", self.backend.healthy):
                     for path in job.directory.iterdir():
                         if path == job.file:
                             continue
@@ -194,6 +199,8 @@ def make_app(manager):
                 retirement.request_finished()
 
     async def lifecycle(app):
+        if hasattr(manager.backend, "start"):
+            await manager.backend.start(manager.root.parent)
         tasks = [asyncio.create_task(manager.run()), asyncio.create_task(manager.sweep()),
                  asyncio.create_task(retirement.run())]
         try:
@@ -204,7 +211,9 @@ def make_app(manager):
             for task in tasks:
                 with suppress(asyncio.CancelledError):
                     await task
-            if manager.backend.healthy:
+            if hasattr(manager.backend, "close"):
+                await manager.backend.close()
+            if getattr(manager.backend, "tree_safe", manager.backend.healthy):
                 for job in list(manager.jobs.values()):
                     manager.remove(job)
 
@@ -287,7 +296,14 @@ def make_app(manager):
 
 
 async def serve():
-    runner = None
+    runner = backend = None
+    # Startup now loads resident models. SIGTERM must cancel that await too,
+    # otherwise the launcher can outlive a server stopped before ready.
+    if os.name != "nt":
+        loop = asyncio.get_running_loop()
+        task = asyncio.current_task()
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(signum, task.cancel)
     try:
         async def request_retirement():
             Path(os.environ["AVATAR_RETIRE_FILE"]).touch(mode=0o600)
@@ -300,19 +316,19 @@ async def serve():
         runner = web.AppRunner(make_app(manager), access_log=None)
         await runner.setup()
         await web.TCPSite(runner, "127.0.0.1", 18001).start()
-        stopped = asyncio.Event()
-        loop = asyncio.get_running_loop()
-        if os.name != "nt":
-            for signum in (signal.SIGTERM, signal.SIGINT):
-                loop.add_signal_handler(signum, stopped.set)
-        try:
-            await stopped.wait()
-        finally:
-            await runner.cleanup()
-            runner = None
+        await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        pass
     except Exception as error:
         log_marker(f"AVATAR_FATAL server {type(error).__name__}")
         raise SystemExit(1) from None
+    finally:
+        try:
+            if runner is not None:
+                await runner.cleanup()
+        finally:
+            if backend is not None:
+                await backend.close()
 
 
 if __name__ == "__main__":
