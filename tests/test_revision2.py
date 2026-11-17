@@ -355,6 +355,7 @@ async def test_one_job_at_a_time_and_crash_fails_only_inflight(tmp_path):
         backend.process.kill()
         with pytest.raises(GenerationFailed, match="generation failed"):
             await task
+        await asyncio.wait_for(backend.wait_ready(), 5)
         assert backend.healthy and backend.process.pid != old
         gate.touch()
         second = tmp_path / "second"
@@ -415,6 +416,8 @@ def test_rank_zero_loads_once_and_broadcasts_each_job_on_gloo(tmp_path, monkeypa
     monkeypatch.setitem(sys.modules, "torch", torch)
     monkeypatch.setitem(sys.modules, "torch.distributed", distributed)
     monkeypatch.setattr(avatar_engine, "load_runtime", load)
+    monkeypatch.setattr(avatar_engine.gpu_watch, "Sampler", lambda: SimpleNamespace(
+        start=lambda: SimpleNamespace(stop=lambda: None)))
     monkeypatch.setattr(avatar_engine, "generate", lambda directory, job, runtime: calls.append(job["id"]))
     def next_job(inbox):
         assert (inbox / "ready.json").exists()

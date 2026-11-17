@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 from acceleration import attention_overrides, compile_dit, select_attention
 from dialog import pad_speeches, target_masks
+import gpu_watch
 from resident_protocol import atomic_json, wait_job
 
 from media import encode_frames, mix_audio, write_progress
@@ -75,15 +76,12 @@ def load_runtime(directory, context_parallel_size):
     # DeviceMesh creates subgroups with PyTorch defaults; bound their NCCL work to the same hour.
     for group in (context_parallel_util.get_cp_group(), context_parallel_util.get_dp_group()):
         dist.distributed_c10d._set_pg_timeout(datetime.timedelta(seconds=3600), group=group)
-    sampler = None
     if global_rank == 0:
-        import gpu_watch
         gpu_watch.topology()
         try:
             gpu_watch.peer_copy(torch)
         except Exception as error:  # a diagnostic never fails the job
             print("AVATAR_GPU_PEER failed " + type(error).__name__, flush=True)
-        sampler = gpu_watch.Sampler().start()
     cp_rank = context_parallel_util.get_cp_rank()
     cp_size = context_parallel_util.get_cp_size()
     cp_split_hw = context_parallel_util.get_optimal_split(cp_size)
@@ -134,7 +132,7 @@ def load_runtime(directory, context_parallel_size):
     dist.barrier(group=control)
     return SimpleNamespace(pipe=pipe, separator=vocal_separator, local_rank=local_rank,
                            global_rank=global_rank, cp_rank=cp_rank, control=control,
-                           sampler=sampler, state={"attention": attention, "compiled": compiled})
+                           state={"attention": attention, "compiled": compiled})
 
 
 def generate(directory, job, runtime):
@@ -327,7 +325,12 @@ def run(inbox, context_parallel_size):
             dist.broadcast_object_list(message, src=0, group=runtime.control)
             request = message[0]
             directory = Path(request["directory"])
-            generate(directory, request["job"], runtime)
+            sampler = gpu_watch.Sampler().start() if runtime.global_rank == 0 else None
+            try:
+                generate(directory, request["job"], runtime)
+            finally:
+                if sampler is not None:
+                    sampler.stop()
             os.chdir(inbox)
             tempfile.tempdir = str(inbox)
             if runtime.global_rank == 0:
@@ -335,8 +338,6 @@ def run(inbox, context_parallel_size):
                 (inbox / "active.json").unlink(missing_ok=True)
             del request, message
     finally:
-        if runtime.sampler is not None:
-            runtime.sampler.stop()
         dist.destroy_process_group()
 
 

@@ -45,8 +45,8 @@ def test_manifest_matches_every_selected_hub_entry():
 
 def test_download_uses_pinned_sources_and_layout(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr(download, "download_file", lambda *a: calls.append(a))
-    download.download_models(tmp_path)
+    monkeypatch.setattr(download, "download_file", lambda *a, **k: calls.append(a))
+    download.download_models(tmp_path, emit=lambda line: None)
     assert calls == [(f"https://huggingface.co/{f['repository']}/resolve/{f['revision']}/{f['source_path']}",
                       tmp_path / f["path"], f["size"], f["sha256"]) for f in download.manifest()["files"]]
 

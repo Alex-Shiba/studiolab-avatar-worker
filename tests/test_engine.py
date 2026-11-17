@@ -85,7 +85,7 @@ async def test_timeout_kills_process_group_and_next_job_recovers(tmp_path):
     pids = json.loads((tmp_path / "pids.json").read_text())
     assert len(pids) == 2
     assert not any(psutil.pid_exists(pid) and live(psutil.Process(pid)) for pid in pids)
-    assert backend.healthy and backend.process is not None
+    assert not backend.healthy and backend.process is None
     backend.env["AVATAR_TEST_MODE"] = "normal"
     backend.timeout = 15
     await backend.restart()

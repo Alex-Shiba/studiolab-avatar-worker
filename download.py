@@ -3,13 +3,41 @@
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import threading
 import time
-from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 MANIFEST_PATH = Path(__file__).with_name("model-manifest.json")
+# Anonymous Hugging Face downloads were throttled to ~14 MB/s on 2026-11-17 after a day of repeated 60 GB boots from one host
+# (the exam's 8-second sample still saw 226 MB/s), and the boot ran out of its 30 minutes. With HF_TOKEN in the machine's
+# environment (a template or account variable the owner sets; never printed: diagnostics redact *TOKEN*) requests are
+# authenticated. The token goes only to Hugging Face hosts and is dropped when a redirect leaves them.
+HF_HOSTS = ("huggingface.co", "hf.co")
+
+
+def hf_host(url):
+    host = (urlsplit(url).hostname or "").lower()
+    return any(host == name or host.endswith("." + name) for name in HF_HOSTS)
+
+
+def hf_headers(url, env=None):
+    token = (os.environ if env is None else env).get("HF_TOKEN", "").strip()
+    return {"Authorization": f"Bearer {token}"} if token and hf_host(url) else {}
+
+
+class HFRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and not hf_host(newurl):
+            new.remove_header("Authorization")
+        return new
+
+
+hf_open = build_opener(HFRedirect).open
 
 
 def manifest():
@@ -26,7 +54,7 @@ def valid_file(path, size, digest):
     return sha.hexdigest() == digest
 
 
-def download_file(url, target, size, digest, *, connections=6, opener=urlopen, sleep=time.sleep,
+def download_file(url, target, size, digest, *, connections=6, opener=hf_open, sleep=time.sleep,
                   progress=lambda value: None, max_attempts=None, cancelled=None):
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -68,7 +96,7 @@ def download_file(url, target, size, digest, *, connections=6, opener=urlopen, s
                 if have > length:
                     path.unlink()
                     have = 0
-                request = Request(url, headers={"Range": f"bytes={start + have}-{end}",
+                request = Request(url, headers={**hf_headers(url), "Range": f"bytes={start + have}-{end}",
                                                 "Accept-Encoding": "identity"})
                 with opener(request, timeout=120) as response:
                     expected = f"bytes {start + have}-{end}/{size}"
@@ -140,11 +168,27 @@ def download_file(url, target, size, digest, *, connections=6, opener=urlopen, s
     return target
 
 
-def download_models(model_root):
-    data = manifest()
-    for item in data["files"]:
+def download_models(model_root, *, emit=None, clock=time.monotonic, every=30.0, fetch=None):
+    """All pinned files in order; one numbers-only progress line every `every` seconds (MB/s since the last line)."""
+    emit = emit or (lambda line: print(line, flush=True))
+    fetch = fetch or download_file
+    files = manifest()["files"]
+    total = sum(item["size"] for item in files)
+    started = clock()
+    last = {"at": started, "bytes": 0}
+    done = 0
+    for item in files:
         repo, revision = item["repository"], item["revision"]
         source = item.get("source_path", item["path"])
         url = f"https://huggingface.co/{repo}/resolve/{revision}/{source}"
-        download_file(url, Path(model_root) / item["path"], item["size"], item["sha256"])
 
+        def progress(fraction, base=done, size=item["size"]):
+            now, have = clock(), base + int(fraction * size)
+            if now - last["at"] >= every:
+                rate = (have - last["bytes"]) / max(now - last["at"], 1e-9) / 1e6
+                emit("AVATAR_DOWNLOAD %.1f/%.1f GB %.0f MB/s" % (have / 1e9, total / 1e9, rate))
+                last["at"], last["bytes"] = now, have
+
+        fetch(url, Path(model_root) / item["path"], item["size"], item["sha256"], progress=progress)
+        done += item["size"]
+    emit("AVATAR_DOWNLOAD done %.1f GB in %.0f s" % (total / 1e9, clock() - started))

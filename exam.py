@@ -9,6 +9,8 @@ import threading
 import time
 from urllib.request import Request, urlopen
 
+from download import hf_headers, hf_open
+
 
 GIB = 1024 ** 3
 MIB = 1024 ** 2
@@ -68,7 +70,8 @@ def disk_write_mb_s(folder, megabytes=512, clock=time.monotonic):
             pass
 
 
-def download_mb_s(url, size, *, connections=6, seconds=8.0, window=512 * MIB, opener=urlopen, clock=time.monotonic):
+def download_mb_s(url, size, *, connections=6, seconds=8.0, window=512 * MIB, opener=None, clock=time.monotonic):
+    opener = opener or hf_open
     """Megabytes a second of the model's own source, read the way the boot reads it: byte ranges in parallel.
 
     Nothing is kept: the measure costs a second of the line, and the boot's own resumable download starts clean.
@@ -83,7 +86,7 @@ def download_mb_s(url, size, *, connections=6, seconds=8.0, window=512 * MIB, op
         start = index * step
         end = min(size - 1, start + min(window, step) - 1)
         try:
-            request = Request(url, headers={"Range": f"bytes={start}-{end}", "Accept-Encoding": "identity"})
+            request = Request(url, headers={**hf_headers(url), "Range": f"bytes={start}-{end}", "Accept-Encoding": "identity"})
             with opener(request, timeout=20) as response:
                 if response.status != 206:
                     return

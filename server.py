@@ -129,10 +129,7 @@ class JobManager:
     async def run(self):
         while True:
             job, spec = await self.queue.get()
-            while not self.backend.healthy:
-                await asyncio.sleep(.25)
             started = self.clock()
-            job.state, job.stage = "running", "loading"
 
             def progress(update):
                 for key in ("stage", "gpus", "width", "height", "frames", "attention", "compiled"):
@@ -141,6 +138,12 @@ class JobManager:
                 job.progress = max(job.progress, min(1.0, update.get("progress", job.progress)))
 
             try:
+                while not self.backend.healthy:
+                    if getattr(self.backend, "dead", False):
+                        raise GenerationFailed("generation failed")
+                    await asyncio.sleep(.25)
+                started = self.clock()
+                job.state, job.stage = "running", "loading"
                 job.file = await self.backend.render(spec, job.directory, progress)
                 job.state, job.progress, job.stage = "done", 1.0, "done"
                 job.exec_s = max(0.0, self.clock() - started)
@@ -316,7 +319,10 @@ async def serve():
         runner = web.AppRunner(make_app(manager), access_log=None)
         await runner.setup()
         await web.TCPSite(runner, "127.0.0.1", 18001).start()
-        await asyncio.Event().wait()
+        await backend.failed.wait()
+        # Publish failure for every accepted job before the parent retires us.
+        await manager.queue.join()
+        raise GenerationFailed("generation failed")
     except asyncio.CancelledError:
         pass
     except Exception as error:

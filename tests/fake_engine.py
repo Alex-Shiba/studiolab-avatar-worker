@@ -28,7 +28,7 @@ def generate(directory, spec):
             time.sleep(.02)
     for completed in range(1, spec["segments"] + 1):
         write_progress(directory, completed, spec["segments"], width=32, height=24)
-        time.sleep(.15)
+        time.sleep(.4)  # longer than a busy test host's poll gap: the segment stage must be observable
     write_progress(directory, spec["segments"], spec["segments"], stage="muxing", width=32, height=24)
     # More generated frames than the voice: the production writer must trim them.
     frame = bytes((25, 60, 90)) * (32 * 24)

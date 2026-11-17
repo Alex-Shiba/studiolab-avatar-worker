@@ -65,6 +65,9 @@ def live(process):
         return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
         return False
+    except psutil.AccessDenied:
+        # An unreadable process is not proof of a successful teardown.
+        return True
 
 
 class ProcessTree:
@@ -74,6 +77,10 @@ class ProcessTree:
         self.remember()
 
     def remember(self):
+        # Keep living orphans for verified teardown, but discard exited samplers.
+        for key, process in list(self.known.items()):
+            if not live(process):
+                del self.known[key]
         try:
             parent = psutil.Process(self.pid)
             for process in [parent, *parent.children(recursive=True)]:
@@ -123,10 +130,20 @@ class EngineBackend:
         self.process = self.tree = self.output = self.monitor = self.inbox = None
         self.state = {}
         self.lock = asyncio.Lock()
+        self.failed = asyncio.Event()
+        self.reload_failures = 0
+
+    @property
+    def dead(self):
+        return self.failed.is_set()
+
+    def fail(self):
+        self.healthy = False
+        self.failed.set()
 
     @property
     def healthy(self):
-        return self._healthy and self.process is not None and self.process.returncode is None
+        return not self.dead and self._healthy and self.process is not None and self.process.returncode is None
 
     @healthy.setter
     def healthy(self, value):
@@ -151,6 +168,9 @@ class EngineBackend:
             self.tree_safe = await self.tree.stop(self.process)
             if self.tree_safe:
                 self.process = self.tree = None
+            else:
+                # Never launch a second engine over a group we could not kill.
+                self.fail()
         if self.output is not None:
             self.output.cancel()
             with suppress(asyncio.CancelledError):
@@ -159,6 +179,8 @@ class EngineBackend:
         return self.tree_safe
 
     async def _launch(self):
+        if self.dead:
+            raise GenerationFailed("generation failed")
         if not await self._stop():
             raise GenerationFailed("engine did not stop")
         self.state = {}
@@ -205,24 +227,43 @@ class EngineBackend:
             await self._stop()
             raise
 
+    async def _reload(self):
+        if self.dead:
+            raise GenerationFailed("generation failed")
+        try:
+            await self._launch()
+        except Exception:
+            self.reload_failures += 1
+            if self.reload_failures >= 3 or not self.tree_safe:
+                self.fail()
+            raise
+        else:
+            self.reload_failures = 0
+
+    async def wait_ready(self):
+        while not self.healthy:
+            if self.dead or self.closing:
+                raise GenerationFailed("generation failed")
+            await asyncio.sleep(self.poll)
+
     async def _monitor(self):
         while True:
             await asyncio.sleep(max(.5, self.poll))
             async with self.lock:
-                if self.closing:
+                if self.closing or self.dead:
                     return
                 if self.process is not None:
                     self.tree.remember()
                 if not self.healthy:
                     try:
-                        await self._launch()
-                    except (GenerationFailed, OSError):
-                        # Pending jobs remain in the server queue while the models reload.
+                        await self._reload()
+                    except Exception:
+                        # Pending jobs survive only a bounded series of failed loads.
                         pass
 
     async def restart(self):
         async with self.lock:
-            await self._launch()
+            await self._reload()
 
     async def close(self):
         self.closing = True
@@ -257,19 +298,19 @@ class EngineBackend:
             pass
 
     async def render(self, job, directory, callback):
+        if self.dead:
+            raise GenerationFailed("generation failed")
         if self.busy or self.closing:
             raise GenerationFailed("backend unavailable")
         if self.inbox is None:
             await self.start(Path(directory).parent)
+        # The monitor owns recovery; never wait while holding its lock.
+        await self.wait_ready()
         async with self.lock:
             self.busy = True
             try:
-                while not self.healthy:
-                    try:
-                        await self._launch()
-                    except (GenerationFailed, OSError):
-                        # No message was submitted: preserve this queued job through reload failures.
-                        await asyncio.sleep(max(.5, self.poll))
+                if not self.healthy or self.closing:
+                    raise GenerationFailed("generation failed")
                 directory = Path(directory).resolve()
                 token = uuid.uuid4().hex
                 (directory / "completion.json").unlink(missing_ok=True)
@@ -304,11 +345,10 @@ class EngineBackend:
                 await self._stop()
                 raise
             except Exception as error:
-                # Reload before the server dequeues its next job. Only this job fails.
-                try:
-                    await self._launch()
-                except (GenerationFailed, OSError):
-                    pass
+                # Report this job's failure after teardown, without waiting for a reload.
+                await self._stop()
+                if self.dead:
+                    raise GenerationFailed("generation failed") from None
                 if isinstance(error, GenerationFailed):
                     raise
                 raise GenerationFailed("generation failed") from None

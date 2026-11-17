@@ -3,7 +3,7 @@
 A live 2×H100 SXM machine ran 2.4–3× slower than the trial's 2×H100 SXM box; the step time rose for the first ~100 s.
 Two suspects: heat or power throttling, and GPU-to-GPU traffic that goes through host memory instead of NVLink/P2P.
 These lines tell them apart: the topology, peer access and copy speed once per job, then clocks, power, temperature
-and throttle reasons every 10 s while the engine runs. Lines carry numbers only.
+and throttle reasons every 10 s while a job runs. Lines carry numbers only.
 """
 
 import subprocess
@@ -70,3 +70,5 @@ class Sampler:
 
     def stop(self):
         self.stopped.set()
+        # The query has a timeout; finish it before returning the engine to idle.
+        self.thread.join()

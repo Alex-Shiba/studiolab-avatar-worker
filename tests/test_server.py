@@ -108,6 +108,15 @@ async def test_expiry_exact_boundary_request_reusable_and_fetch_lease(app_client
     assert await start(http, request=request) != job_id
 
 
+async def until_healthy(backend, timeout=20):
+    # Since review fix R3 the monitor relaunches a failed engine in the background.
+    import asyncio, time
+    deadline = time.monotonic() + timeout
+    while not (backend.healthy and backend.process is not None):
+        assert time.monotonic() < deadline, "engine did not come back"
+        await asyncio.sleep(.05)
+
+
 async def test_failed_job_is_clean_and_next_job_usable(app_client):
     http, manager, backend, now, gate = app_client
     backend.env["AVATAR_TEST_MODE"] = "failure"
@@ -117,7 +126,7 @@ async def test_failed_job_is_clean_and_next_job_usable(app_client):
     assert failed["error"] == "generation failed" and "exec_s" not in failed
     assert list(manager.jobs[first].directory.iterdir()) == []
     assert (await http.post("/clip/file", json={"id": first})).status == 409
-    assert backend.healthy
+    await until_healthy(backend)
     backend.env["AVATAR_TEST_MODE"] = "normal"
     await backend.restart()
     gate.touch()
@@ -136,7 +145,8 @@ async def test_engine_crash_preserves_two_queued_jobs(app_client):
     old_pid = backend.process.pid
     backend.process.kill()
     await wait_state(http, first, "failed")
-    assert backend.healthy and backend.process.pid != old_pid
+    await until_healthy(backend)
+    assert backend.process.pid != old_pid
     assert manager.jobs[second].state in ("queued", "running")
     assert manager.jobs[third].state == "queued"
     gate.touch()
