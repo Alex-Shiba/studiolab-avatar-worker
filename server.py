@@ -88,19 +88,25 @@ class JobManager:
         return None
 
     def serving(self):
-        """«ready», «reloading» or None. Once the engine has been ready, a reload after a failed job is transient: the machine keeps
-        answering (Vast's SDK restarts the whole instance on the first non-200 health after a success, and a rebooted machine lost
-        its job and its warm engine; owner's report 2026-11-19). A dead engine or a retiring machine is never serving."""
-        if self.retirement.retiring or getattr(self.backend, "dead", False):
+        """«ready», «reloading», «retiring» or None. Once the engine has been ready, a reload after a failed job is transient: the
+        machine keeps answering (Vast's SDK restarts the whole instance on the first non-200 health after a success, and a rebooted
+        machine lost its job and its warm engine; owner's report 2026-11-19). A machine deleting itself after idling also keeps
+        answering 200: a 503 there made Vast restart it, fail it and create a replacement, an endless paid loop (2026-11-20).
+        Only a dead engine, or a machine that was never ready, is not serving."""
+        if getattr(self.backend, "dead", False):
             return None
         if self.backend.healthy:
             self.ever_ready = True
+        if self.retirement.retiring:
+            return "retiring" if getattr(self, "ever_ready", False) else None
+        if self.backend.healthy:
             return "ready"
         return "reloading" if getattr(self, "ever_ready", False) else None
 
     def available(self):
         # A job taken during a reload waits in the queue for the engine (the job loop waits for health, and fails on a dead engine).
-        return self.active < 3 and self.serving() is not None
+        # A retiring machine takes no new work.
+        return self.active < 3 and self.serving() in ("ready", "reloading")
 
     def submit(self, clip, prepared):
         # No await between the second lookup, capacity check and registration.
@@ -218,6 +224,9 @@ def make_app(manager):
     async def lifecycle(app):
         if hasattr(manager.backend, "start"):
             await manager.backend.start(manager.root.parent)
+        # The idle clock starts when the machine can work, not when the server process began: loading the resident engine takes
+        # minutes, and counting them made a fresh machine retire the moment it was ready (2026-11-20).
+        retirement.ready()
         tasks = [asyncio.create_task(manager.run()), asyncio.create_task(manager.sweep()),
                  asyncio.create_task(retirement.run())]
         try:

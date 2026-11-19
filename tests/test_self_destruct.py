@@ -150,3 +150,18 @@ async def test_already_deleted_is_success():
     await retirement.check()
     assert retirement.done
     delete.assert_awaited_once()
+
+
+async def test_idle_clock_starts_when_ready_not_at_boot():
+    # Loading the resident engine takes minutes: counting them retired a fresh machine the moment it was ready (2026-11-20).
+    now, delete = [0], AsyncMock(return_value=204)
+    retirement = idle(now, delete=delete)
+    now[0] = 720  # twelve minutes of loading
+    retirement.ready()
+    now[0] = 720 + 539
+    await retirement.check()
+    delete.assert_not_awaited()
+    assert not retirement.retiring
+    now[0] = 720 + 540
+    await retirement.check()
+    delete.assert_awaited_once()

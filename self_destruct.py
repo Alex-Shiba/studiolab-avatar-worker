@@ -64,6 +64,10 @@ class IdleRetirement:
         self.done = False
         self.retiring = False
 
+    def ready(self):
+        """The machine can take work from now on: idle time is counted from here."""
+        self.last_activity = self.clock()
+
     def request_started(self):
         self.in_flight += 1
         self.last_activity = self.clock()

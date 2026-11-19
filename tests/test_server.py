@@ -189,7 +189,9 @@ async def test_health_retirement_and_running_ttl(app_client):
     manager.expire()
     assert first in manager.jobs and second in manager.jobs
     manager.retirement.retiring = True
-    assert (await http.get("/health")).status == 503
+    # A machine deleting itself keeps answering 200 (a 503 made Vast restart it into an endless paid loop) and takes no work.
+    response = await http.get("/health")
+    assert response.status == 200 and (await response.json())["status"] == "retiring"
     assert (await http.post("/clip/start", json=payload())).status == 429
     manager.retirement.retiring = False
     backend.healthy = False
@@ -230,9 +232,9 @@ async def test_health_markers_only_on_change(app_client):
     for ready, retiring in [(True, False), (False, False), (True, False), (True, True), (True, False)]:
         backend.healthy, manager.retirement.retiring = ready, retiring
         for _ in range(2):
-            assert (await http.get("/health")).status == (503 if retiring else 200)
+            assert (await http.get("/health")).status == 200
     assert lines == ["AVATAR_HEALTH ready", "AVATAR_HEALTH reloading", "AVATAR_HEALTH ready",
-                     "AVATAR_HEALTH unavailable reason=retiring", "AVATAR_HEALTH ready"]
+                     "AVATAR_HEALTH retiring", "AVATAR_HEALTH ready"]
 
 
 def test_serving_before_first_ready_during_reload_and_when_dead(tmp_path):
@@ -250,7 +252,7 @@ def test_serving_before_first_ready_during_reload_and_when_dead(tmp_path):
     backend.healthy = False  # the engine reloads after a failed job
     assert manager.serving() == "reloading" and manager.available()
     manager.retirement.retiring = True
-    assert manager.serving() is None and not manager.available()
+    assert manager.serving() == "retiring" and not manager.available()
     manager.retirement.retiring = False
     backend.fail()
     assert manager.serving() is None and not manager.available()
