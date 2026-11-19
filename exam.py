@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
+import stat
 import shutil
 import threading
 import time
@@ -13,6 +14,7 @@ from download import hf_headers, hf_open
 
 
 GIB = 1024 ** 3
+DISK_FLOOR_GB = 30.0
 MIB = 1024 ** 2
 # What a boot needs at the least; a worker group asks for more in its search, this only catches a wrong answer.
 NEED = {"ram_gb": 110.0, "disk_free_gb": 180.0, "boot_download_s": 1200.0}
@@ -46,6 +48,31 @@ def memory_gb(read=lambda path: Path(path).read_text(encoding="ascii")):
         if 0 < limit < 1 << 50:
             total = limit if total is None else min(total, limit)
     return None if total is None else round(total / GIB, 1)
+
+
+def kept_gb(root, *, walk=os.walk):
+    root = Path(root)
+    try:
+        if not stat.S_ISDIR(root.lstat().st_mode):
+            return 0.0
+    except OSError:
+        return 0.0
+    size = 0
+    seen = set()
+    for directory, _, names in walk(root, followlinks=False):
+        for name in names:
+            try:
+                info = (Path(directory) / name).lstat()
+            except OSError:
+                continue
+            if stat.S_ISREG(info.st_mode):
+                if info.st_ino:
+                    identity = (info.st_dev, info.st_ino)
+                    if identity in seen:
+                        continue
+                    seen.add(identity)
+                size += info.st_blocks * 512 if hasattr(info, "st_blocks") else info.st_size
+    return round(size / GIB, 1)
 
 
 def disk_write_mb_s(folder, megabytes=512, clock=time.monotonic):
@@ -185,6 +212,7 @@ def measure(workspace, data, model_root, *, env=None, probes=None):
         facts["disk_free_gb"] = round(shutil.disk_usage(workspace).free / GIB, 1)
     except OSError:
         facts["disk_free_gb"] = None
+    facts["kept_gb"] = (probes.get("kept") or kept_gb)(Path(model_root).parent)
     facts["disk_mb_s"] = (probes.get("disk") or disk_write_mb_s)(workspace)
     missing = boot_files(data, model_root, env)
     facts["boot_gb"] = round(sum(item["size"] for item in missing) / GIB, 1)
@@ -205,7 +233,10 @@ def verdict(facts, env=None):
     ram, disk = facts.get("ram_gb"), facts.get("disk_free_gb")
     if ram is not None and ram < number(env, "AVATAR_EXAM_RAM_GB", NEED["ram_gb"]):
         return "memory"
-    if disk is not None and disk < number(env, "AVATAR_EXAM_DISK_GB", NEED["disk_free_gb"]):
+    # On reboot part of the original disk allowance already holds our own files.
+    threshold = number(env, "AVATAR_EXAM_DISK_GB", NEED["disk_free_gb"])
+    need = max(min(DISK_FLOOR_GB, threshold), threshold - (facts.get("kept_gb") or 0))
+    if disk is not None and disk < need:
         return "disk"
     speed, gigabytes = facts.get("down_mb_s"), facts.get("boot_gb") or 0
     if speed is not None and gigabytes > 0:
@@ -214,7 +245,7 @@ def verdict(facts, env=None):
     return None
 
 
-FIELDS = ("machine_id", "host_id", "instance", "place", "ram_gb", "disk_free_gb", "disk_mb_s", "boot_gb",
+FIELDS = ("machine_id", "host_id", "instance", "place", "ram_gb", "disk_free_gb", "disk_mb_s", "kept_gb", "boot_gb",
           "down_mb_s", "up_mb_s", "boot_s")
 
 

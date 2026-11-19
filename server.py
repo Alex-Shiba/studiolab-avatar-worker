@@ -15,7 +15,7 @@ import uuid
 from aiohttp import web
 
 from contract import FPS, ID_PATTERN, Invalid, MAX_BODY_BYTES, TTL_S, strict_json, validate_id, validate_start
-from engine_process import EngineBackend, GenerationFailed
+from engine_process import EngineBackend, GenerationFailed, clean_reason
 from self_destruct import IdleRetirement
 from exam import from_environment as machine_facts
 
@@ -55,7 +55,7 @@ class Job:
     request: str | None = None
 
     def public(self):
-        result = {"state": self.state, "progress": self.progress, "stage": self.stage, "fps": FPS}
+        result = {"state": self.state, "progress": self.progress, "stage": "failed" if self.state == "failed" else self.stage, "fps": FPS}
         for key in ("width", "height", "frames", "segments", "gpus", "attention", "compiled", "exec_s", "error"):
             value = getattr(self, key)
             if value is not None:
@@ -64,7 +64,8 @@ class Job:
 
 
 class JobManager:
-    def __init__(self, backend, root, retirement, *, clock=time.monotonic, benchmark_id=None):
+    def __init__(self, backend, root, retirement, *, clock=time.monotonic, benchmark_id=None, log=log_marker):
+        self.log = log
         self.backend, self.root, self.retirement, self.clock = backend, Path(root), retirement, clock
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.jobs, self.requests = {}, {}
@@ -86,8 +87,20 @@ class JobManager:
             return self.jobs[job_id]
         return None
 
+    def serving(self):
+        """«ready», «reloading» or None. Once the engine has been ready, a reload after a failed job is transient: the machine keeps
+        answering (Vast's SDK restarts the whole instance on the first non-200 health after a success, and a rebooted machine lost
+        its job and its warm engine; owner's report 2026-11-19). A dead engine or a retiring machine is never serving."""
+        if self.retirement.retiring or getattr(self.backend, "dead", False):
+            return None
+        if self.backend.healthy:
+            self.ever_ready = True
+            return "ready"
+        return "reloading" if getattr(self, "ever_ready", False) else None
+
     def available(self):
-        return self.active < 3 and not self.retirement.retiring and self.backend.healthy
+        # A job taken during a reload waits in the queue for the engine (the job loop waits for health, and fails on a dead engine).
+        return self.active < 3 and self.serving() is not None
 
     def submit(self, clip, prepared):
         # No await between the second lookup, capacity check and registration.
@@ -149,10 +162,11 @@ class JobManager:
                 job.exec_s = max(0.0, self.clock() - started)
             except asyncio.CancelledError:
                 raise
-            except GenerationFailed as error:
-                job.state, job.stage, job.error = "failed", "failed", str(error)
-            except Exception:
-                job.state, job.stage, job.error = "failed", "failed", "generation failed"
+            except Exception as error:
+                job.state = "failed"
+                job.error = clean_reason(str(error) if isinstance(error, GenerationFailed) else "generation failed " + type(error).__name__)
+                reason = job.error.replace("AVATAR_", "AVATAR-")
+                self.log(f"AVATAR_JOB_FAILED stage={job.stage.replace(' ', '_')} progress={job.progress:.2f} reason={reason}")
             finally:
                 # Completion from all ranks (or teardown) precedes input removal.
                 # If an OS process cannot be killed, retain its directory until retirement.
@@ -285,9 +299,17 @@ def make_app(manager):
         finally:
             job.fetching = False
 
+    last_health = None
+
     async def health(request):
-        healthy = manager.backend.healthy and not retirement.retiring
-        return web.json_response({"status": "ready" if healthy else "unavailable"}, status=200 if healthy else 503)
+        nonlocal last_health
+        serving = manager.serving()
+        marker = serving or "unavailable reason=" + ("retiring" if retirement.retiring
+                                                     else "dead" if getattr(manager.backend, "dead", False) else "engine")
+        if marker != last_health:
+            manager.log("AVATAR_HEALTH " + marker)
+            last_health = marker
+        return web.json_response({"status": serving or "unavailable"}, status=200 if serving else 503)
 
     app = web.Application(client_max_size=MAX_BODY_BYTES, middlewares=[activity])
     app.cleanup_ctx.append(lifecycle)

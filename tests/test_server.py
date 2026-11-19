@@ -19,7 +19,7 @@ async def app_client(tmp_path):
     gate = tmp_path / "release"
     backend = fake_backend(env={**os.environ, "AVATAR_TEST_GATE": str(gate)})
     retirement = IdleRetirement(lambda _: None, env={}, clock=lambda: now[0])
-    manager = JobManager(backend, tmp_path / "jobs", retirement, clock=lambda: now[0])
+    manager = JobManager(backend, tmp_path / "jobs", retirement, clock=lambda: now[0], log=lambda _: None)
     async with TestClient(TestServer(make_app(manager)), connector=connector()) as http:
         yield http, manager, backend, now, gate
 
@@ -119,11 +119,15 @@ async def until_healthy(backend, timeout=20):
 
 async def test_failed_job_is_clean_and_next_job_usable(app_client):
     http, manager, backend, now, gate = app_client
+    lines = []
+    manager.log = lines.append
     backend.env["AVATAR_TEST_MODE"] = "failure"
     await backend.restart()
     first = await start(http)
     failed = await wait_state(http, first, "failed")
-    assert failed["error"] == "generation failed" and "exec_s" not in failed
+    assert failed["stage"] == "failed" and failed["progress"] == 0
+    assert failed["error"].startswith("engine exited rc=1; seen: exitcode=-9, SIGKILL") and "exec_s" not in failed
+    assert lines == ["AVATAR_JOB_FAILED stage=loading progress=0.00 reason=" + failed["error"]]
     assert list(manager.jobs[first].directory.iterdir()) == []
     assert (await http.post("/clip/file", json={"id": first})).status == 409
     await until_healthy(backend)
@@ -189,7 +193,9 @@ async def test_health_retirement_and_running_ttl(app_client):
     assert (await http.post("/clip/start", json=payload())).status == 429
     manager.retirement.retiring = False
     backend.healthy = False
-    assert (await http.post("/clip/start", json=payload())).status == 429
+    # A reload after the engine was once ready keeps taking work: the job waits in the queue for the engine.
+    assert (await http.get("/health")).status == 200
+    assert (await http.post("/clip/start", json=payload())).status == 200
     backend.healthy = True
 
 
@@ -214,3 +220,37 @@ async def test_body_limit_and_machine_facts(tmp_path, monkeypatch):
         http.server.app._client_max_size = 128
         response = await http.post("/clip/start", data=b"x" * 129)
         assert response.status == 400 and (await response.json())["error"] == "invalid"
+
+
+async def test_health_markers_only_on_change(app_client):
+    http, manager, backend, *_ = app_client
+    lines = []
+    manager.log = lines.append
+    # After the first ready answer a reload keeps answering 200 («reloading»): Vast restarts an instance on its first non-200.
+    for ready, retiring in [(True, False), (False, False), (True, False), (True, True), (True, False)]:
+        backend.healthy, manager.retirement.retiring = ready, retiring
+        for _ in range(2):
+            assert (await http.get("/health")).status == (503 if retiring else 200)
+    assert lines == ["AVATAR_HEALTH ready", "AVATAR_HEALTH reloading", "AVATAR_HEALTH ready",
+                     "AVATAR_HEALTH unavailable reason=retiring", "AVATAR_HEALTH ready"]
+
+
+def test_serving_before_first_ready_during_reload_and_when_dead(tmp_path):
+    class Stub:
+        healthy, dead = False, False
+
+        def fail(self):
+            self.healthy, self.dead = False, True
+
+    backend = Stub()
+    manager = JobManager(backend, tmp_path / "jobs", IdleRetirement(lambda _: None, env={}))
+    assert manager.serving() is None and not manager.available()  # still booting: Vast waits for the first ready
+    backend.healthy = True
+    assert manager.serving() == "ready" and manager.available()
+    backend.healthy = False  # the engine reloads after a failed job
+    assert manager.serving() == "reloading" and manager.available()
+    manager.retirement.retiring = True
+    assert manager.serving() is None and not manager.available()
+    manager.retirement.retiring = False
+    backend.fail()
+    assert manager.serving() is None and not manager.available()

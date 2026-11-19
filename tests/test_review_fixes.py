@@ -83,7 +83,9 @@ async def test_failed_reloads_fail_all_jobs_and_exit_server(tmp_path, monkeypatc
         backend.process.kill()
         assert await asyncio.wait_for(task, 15) == 1
         assert backend.dead and backend.reload_failures == 3 and len(launches) == 4
-        assert all(job.state == "failed" and job.error == "generation failed" for job in jobs)
+        assert all(job.state == "failed" for job in jobs)
+        assert jobs[0].error.startswith("engine exited rc=")
+        assert all(job.error == "generation failed" for job in jobs[1:])
         assert all(job.finished_at is not None for job in jobs)
         assert manager.active == manager.retirement.jobs == 0
         assert manager.queue.empty() and backend.process is None and backend.tree_safe
@@ -173,7 +175,7 @@ async def test_inflight_failure_returns_before_blocked_reload(tmp_path, monkeypa
         await until(lambda: (directory / "entered").exists())
         if failure == "crash":
             backend.process.kill()
-        with pytest.raises(GenerationFailed, match="timed out" if failure == "timeout" else "generation failed"):
+        with pytest.raises(GenerationFailed, match="timed out" if failure == "timeout" else "engine exited rc="):
             await asyncio.wait_for(asyncio.shield(task), 3)
         assert backend.tree_safe and not backend.busy and not backend.healthy
         await asyncio.wait_for(entered.wait(), 3)

@@ -1,6 +1,8 @@
 """Resident torchrun supervisor with bounded progress, reload and verified teardown."""
 
 import asyncio
+from collections import deque
+import re
 from contextlib import suppress
 import json
 import os
@@ -22,6 +24,27 @@ from media import video_info
 
 class GenerationFailed(RuntimeError):
     pass
+
+
+def clean_reason(text):
+    return re.sub(r"[^A-Za-z0-9 _.,:;=()/+-]", "", text)[:200]
+
+
+def engine_clues(lines) -> list[str]:
+    clues = []
+    pattern = r"\b(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*(?:Error|Exception|Interrupt)|Error|Exception|Interrupt)\b|\bexitcode\s*:\s*(-?\d+)\b|\b(SIG[A-Z]{3,7}|Killed)\b|(?i:\b(CUDA out of memory|NCCL)\b)"
+    for line in lines:
+        line = re.sub(r"\b[\w.]*AVATAR_[\w.]*", "", line)
+        for match in re.finditer(pattern, line):
+            name, code, word, special = match.groups()
+            if special and special.upper() == "NCCL" and not re.search(r"timeout|timed out|watchdog|error", line, re.I):
+                continue
+            clue = name or ("exitcode=" + code if code else word) or ("NCCL" if special.upper() == "NCCL" else "CUDA-OOM")
+            if len(clue) <= 60 and clue not in clues:
+                clues.append(clue)
+                if len(clues) == 6:
+                    return clues
+    return clues
 
 
 def gpu_group(count):
@@ -132,6 +155,8 @@ class EngineBackend:
         self.timeout, self.poll, self.startup_timeout = timeout, poll, startup_timeout
         self._healthy, self.busy, self.closing, self.tree_safe = False, False, False, True
         self.process = self.tree = self.output = self.monitor = self.inbox = None
+        self.lines = deque(maxlen=80)
+        self.partial = ""
         self.state = {}
         self.lock = asyncio.Lock()
         self.failed = asyncio.Event()
@@ -200,11 +225,21 @@ class EngineBackend:
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env, **flags)
         self.process, self.tree = process, ProcessTree(process.pid)
 
+        self.partial = ""
+
         async def drain():
             while block := await process.stdout.read(8192):
                 # The parent Diagnostics tee redacts before disk/stdout.
-                sys.stdout.write(block.decode("utf-8", errors="replace"))
+                text = block.decode("utf-8", errors="replace")
+                pieces = text.split("\n")
+                for piece in pieces[:-1]:
+                    self.lines.append((self.partial + piece)[:400])
+                    self.partial = ""
+                self.partial = (self.partial + pieces[-1])[:4096]
+                sys.stdout.write(text)
                 sys.stdout.flush()
+            if self.partial:
+                self.lines.append(self.partial[:400])
 
         self.output = asyncio.create_task(drain())
         deadline = time.monotonic() + self.startup_timeout
@@ -301,6 +336,12 @@ class EngineBackend:
         except (OSError, ValueError, AttributeError):
             pass
 
+    def failure_reason(self, what):
+        if self.process is not None and self.process.returncode is not None:
+            what += f" rc={self.process.returncode}"
+        clues = engine_clues(self.lines)
+        return clean_reason(what + ("; seen: " + ", ".join(clues) if clues else ""))
+
     async def render(self, job, directory, callback):
         if self.dead:
             raise GenerationFailed("generation failed")
@@ -319,14 +360,17 @@ class EngineBackend:
                 token = uuid.uuid4().hex
                 (directory / "completion.json").unlink(missing_ok=True)
                 (directory / "progress.json").unlink(missing_ok=True)
+                self.lines.clear()
+                self.partial = ""
                 atomic_json(self.inbox / "job.json", {"directory": str(directory), "token": token, "job": job})
                 deadline = time.monotonic() + self.timeout
                 callback({"progress": 0.0, "stage": "loading", "gpus": self.gpus, **self.state})
                 while True:
                     if self.process.returncode is not None:
-                        raise GenerationFailed("generation failed")
+                        await asyncio.wait({self.output}, timeout=2)
+                        raise GenerationFailed(self.failure_reason("engine exited"))
                     if time.monotonic() >= deadline:
-                        raise GenerationFailed("generation timed out")
+                        raise GenerationFailed(self.failure_reason("generation timed out"))
                     self.tree.remember()
                     self.progress(directory, job, callback)
                     try:
@@ -350,11 +394,8 @@ class EngineBackend:
                 raise
             except Exception as error:
                 # Report this job's failure after teardown, without waiting for a reload.
+                reason = error if isinstance(error, GenerationFailed) else GenerationFailed(self.failure_reason("generation failed " + type(error).__name__))
                 await self._stop()
-                if self.dead:
-                    raise GenerationFailed("generation failed") from None
-                if isinstance(error, GenerationFailed):
-                    raise
-                raise GenerationFailed("generation failed") from None
+                raise reason from None
             finally:
                 self.busy = False

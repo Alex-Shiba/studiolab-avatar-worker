@@ -1,5 +1,6 @@
 import io
 import json
+import os
 
 import pytest
 
@@ -13,7 +14,7 @@ DATA = {"repository": "org/model", "revision": "abc", "files": [
 
 
 def facts(**change):
-    return {"ram_gb": 125.0, "disk_free_gb": 500.0, "disk_mb_s": 1800.0, "boot_gb": 42.0, "down_mb_s": 180.0, "up_mb_s": 60.0, **change}
+    return {"ram_gb": 125.0, "disk_free_gb": 500.0, "kept_gb": 0.0, "disk_mb_s": 1800.0, "boot_gb": 42.0, "down_mb_s": 180.0, "up_mb_s": 60.0, **change}
 
 
 def test_only_what_would_fail_the_boot_is_a_reason():
@@ -163,3 +164,47 @@ def test_a_machine_that_cannot_boot_is_refused_before_the_install(capsys):
     with pytest.raises(worker.ExamFailed, match="download"):
         worker.examine(lines.append, measure=lambda *args, env=None: facts(down_mb_s=5.0), env={})
     assert lines[-1].startswith("AVATAR_EXAM_FAILED download {")
+
+
+@pytest.mark.parametrize("free,kept,threshold,reason", [
+    (179.9, 0, 180, "disk"), (180, 0, 180, None), (105, 80, 180, None), (95, 80, 180, "disk"),
+    (25, 170, 180, "disk"), (115, 80, 200, "disk"), (110, 80, 200, "disk"), (120, 80, 200, None),
+    (10, 0, 10, None), (9.9, 0, 10, "disk"), (10, 5, 10, None), (9.9, 5, 10, "disk")])
+def test_kept_files_reduce_disk_need(free, kept, threshold, reason):
+    assert exam.verdict(facts(disk_free_gb=free, kept_gb=kept), {"AVATAR_EXAM_DISK_GB": threshold}) == reason
+
+
+def test_allocated_files_under_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(exam, "GIB", 1024)
+    sub = tmp_path / "venv"
+    sub.mkdir()
+    files = [tmp_path / "weight", sub / "module"]
+    for path in files:
+        path.write_bytes(b"x" * 2048)
+    expected = sum(s.st_blocks * 512 if hasattr(s, "st_blocks") else s.st_size for s in (p.lstat() for p in files))
+    assert exam.kept_gb(tmp_path) == round(expected / 1024, 1)
+    assert exam.kept_gb(tmp_path / "absent") == 0.0
+
+
+def test_hard_link_counts_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(exam, "GIB", 1024)
+    path = tmp_path / "weight"
+    path.write_bytes(b"x" * 8192)
+    original = exam.kept_gb(tmp_path)
+    assert original > 0
+    try:
+        os.link(path, tmp_path / "linked")
+    except OSError as error:
+        pytest.skip(f"hard links unavailable: {error}")
+    assert exam.kept_gb(tmp_path) == original
+
+
+def test_reboot_exam_reports_kept_space(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(exam.shutil, "disk_usage", lambda path: SimpleNamespace(free=105 * exam.GIB))
+    probes = {"identity": lambda env: {}, "memory": lambda: 125, "disk": lambda path: 1000,
+              "kept": lambda path: 80 if path == tmp_path else 0, "upload": lambda: 50}
+    def measured(*args, env):
+        return exam.measure(tmp_path, {"files": []}, tmp_path / "models", env=env, probes=probes)
+    result = worker.examine(lambda line: None, env={}, measure=measured)
+    assert json.loads(exam.public(result))["kept_gb"] == 80

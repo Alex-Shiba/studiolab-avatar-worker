@@ -21,6 +21,7 @@ def generate(directory, spec):
         (directory / "pids.json").write_text(json.dumps([os.getpid(), child.pid]))
         time.sleep(120)
     if mode == "failure":
+        print("exitcode  : -9\nSignal 9 (SIGKILL) received by PID 123\ntorch.OutOfMemoryError: CUDA out of memory", flush=True)
         raise SystemExit(1)
     gate = os.environ.get("AVATAR_TEST_GATE")
     if gate:

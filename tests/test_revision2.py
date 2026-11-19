@@ -353,7 +353,7 @@ async def test_one_job_at_a_time_and_crash_fails_only_inflight(tmp_path):
             await backend.render(spec, directory, lambda _: None)
         old = backend.process.pid
         backend.process.kill()
-        with pytest.raises(GenerationFailed, match="generation failed"):
+        with pytest.raises(GenerationFailed, match="engine exited rc="):
             await task
         await asyncio.wait_for(backend.wait_ready(), 5)
         assert backend.healthy and backend.process.pid != old

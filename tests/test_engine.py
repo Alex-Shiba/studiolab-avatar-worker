@@ -155,3 +155,18 @@ def test_mux_trims_video_preserves_original_voice(tmp_path, duration):
                                      capture_output=True, check=True).stdout)
     audio = next(s for s in data["streams"] if s["codec_type"] == "audio")
     assert float(audio["duration"]) == pytest.approx(duration, abs=.005)
+
+
+def test_engine_clues_only_diagnostic_words():
+    from engine_process import engine_clues
+    lines = ["Traceback (most recent call last)", "torch.OutOfMemoryError: CUDA out of memory",
+             "exitcode  : -9", "Signal 9 (SIGKILL) received by PID 123", "AVATAR_FATAL", "AVATAR_FATALError",
+             "speak these words " + "x" * 300, "nccl Watchdog timed out", "Killed", "ChildFailedError"]
+    assert engine_clues(lines) == ["OutOfMemoryError", "CUDA-OOM", "exitcode=-9", "SIGKILL", "NCCL", "Killed"]
+
+
+async def test_exited_engine_reports_job_output(tmp_path):
+    backend = fake_backend(env={**os.environ, "AVATAR_TEST_MODE": "failure"})
+    with pytest.raises(GenerationFailed, match="^engine exited rc=1; seen: exitcode=-9, SIGKILL"):
+        await backend.render(job_files(tmp_path), tmp_path, lambda update: None)
+    await backend.close()
