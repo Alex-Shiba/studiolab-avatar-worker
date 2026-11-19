@@ -15,7 +15,7 @@ import tempfile
 from types import SimpleNamespace
 
 from acceleration import attention_overrides, compile_dit, select_attention
-from dialog import pad_speeches, target_masks
+from dialog import pad_speeches, silent_speech, target_masks
 import gpu_watch
 from resident_protocol import atomic_json, wait_job
 
@@ -172,6 +172,13 @@ def generate(directory, job, runtime):
         audio_process_duration = max(generate_duration, job["duration"]) + 1.0
         speeches = []
         for name in track_names:
+            if dialog:
+                import librosa
+                raw, _ = librosa.load(str(directory / name), sr=16000, mono=True)
+                if silent_speech(raw):
+                    # The silent listener: zeros, exactly what the padding below adds to a shorter track.
+                    speeches.append(np.zeros(len(raw), dtype=np.float32))
+                    continue
             speech, sr = separate_vocals(vocal_separator, str(directory / name), duration=audio_process_duration)
             if not speech.size or sr != 16000:
                 raise ValueError("invalid separated audio")

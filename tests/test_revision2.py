@@ -17,7 +17,7 @@ from acceleration import attention_overrides, compile_dit, select_attention, shi
 import avatar_engine
 import boot
 from contract import Invalid, validate_start
-from dialog import pad_speeches, pixel_boxes, target_masks
+from dialog import pad_speeches, pixel_boxes, silent_speech, target_masks
 from download import manifest
 from engine_process import GenerationFailed
 from media import bounded_frames, encode_frames, mix_audio, video_info
@@ -92,6 +92,16 @@ def test_padding_keeps_longer_track_and_silence():
     left, right = pad_speeches([left, right], 1, 4)
     np.testing.assert_array_equal(left, [1, 2, 0, 0])
     np.testing.assert_array_equal(right, [3, 4, 5, 0])
+
+
+def test_silent_listener_track_skips_the_separator():
+    # Live 2026-11-20: the vocal separator refused the studio's all-zero listener track and the whole take failed.
+    assert silent_speech(np.zeros(32000))
+    assert silent_speech(np.full(100, 5e-5))
+    assert not silent_speech(np.array([0., 0., .01]))
+    assert not silent_speech(np.zeros(0))
+    source = (ROOT / "avatar_engine.py").read_text(encoding="utf-8")
+    assert source.index("silent_speech(raw)") < source.index("separate_vocals(vocal_separator")
 
 
 def test_pixel_boxes_default_and_fractional_order():

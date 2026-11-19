@@ -26,6 +26,17 @@ def target_masks(torch, boxes, width, height, device):
     return torch.stack([*masks, background], dim=0).to(device)
 
 
+SILENCE_PEAK = 1e-4  # -80 dBFS: under any recorded voice; the studio's listener track is exact zeros
+
+
+def silent_speech(samples):
+    """A track with no sound at all: the listener of a one-speaker dialog. The vocal separator refuses an all-zero file
+    (audio-separator «is empty or not valid», live 2026-11-20), and upstream pads a shorter track with zeros anyway."""
+    import numpy as np
+    samples = np.asarray(samples)
+    return samples.size > 0 and bool(np.all(np.abs(samples) < SILENCE_PEAK))
+
+
 def pad_speeches(speeches, sample_rate, duration):
     import numpy as np
     length = max(math.ceil(duration * sample_rate), *(len(s) for s in speeches))
