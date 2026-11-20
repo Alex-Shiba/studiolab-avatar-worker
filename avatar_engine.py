@@ -15,7 +15,7 @@ import tempfile
 from types import SimpleNamespace
 
 from acceleration import attention_overrides, compile_dit, select_attention
-from dialog import pad_speeches, silent_speech, target_masks
+from dialog import install_chunked_ref_map, pad_speeches, silent_speech, target_masks
 import gpu_watch
 from resident_protocol import atomic_json, wait_job
 
@@ -67,7 +67,9 @@ def load_runtime(directory, context_parallel_size):
     # -------- avatar related --------
     from longcat_video.audio_process import get_audio_encoder, get_audio_feature_extractor
     from audio_separator.separator import Separator
-    
+    # Before the DiT is built or compiled: a 720p dialog ran out of memory in upstream's one-piece reference map.
+    install_chunked_ref_map(torch)
+
 
     checkpoint_dir = str(Path(os.environ["AVATAR_MODEL_ROOT"]) / "LongCat-Video-Avatar-1.6")
     model_type = "avatar-v1.5" if MODEL_TYPE == "avatar-v1.6" else MODEL_TYPE
@@ -357,7 +359,15 @@ def main():
         run(args.inbox, args.context_parallel_size)
     except Exception as error:
         print("AVATAR_ENGINE_FAILED " + type(error).__name__, flush=True)
+        if type(error).__name__ == "OutOfMemoryError":
+            print("AVATAR_ENGINE_OOM " + oom_numbers(str(error)), flush=True)
         raise SystemExit(1) from None
+
+
+def oom_numbers(message):
+    """Only the sizes of a CUDA out-of-memory message (how much it asked for, what was free): nothing else leaves."""
+    import re
+    return " ".join(re.findall(r"\d+(?:\.\d+)? [GM]iB", message)[:6]) or "no sizes"
 
 
 if __name__ == "__main__":

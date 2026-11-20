@@ -15,5 +15,6 @@
   "upstream-context-parallel.py": "https://raw.githubusercontent.com/meituan-longcat/LongCat-Video/58eb336edc5c8c63389838727e40b8c18434e54e/longcat_video/context_parallel/context_parallel_util.py",
   "upstream-attention.py": "https://raw.githubusercontent.com/meituan-longcat/LongCat-Video/58eb336edc5c8c63389838727e40b8c18434e54e/longcat_video/modules/attention.py",
   "upstream-avatar-attention.py": "https://raw.githubusercontent.com/meituan-longcat/LongCat-Video/58eb336edc5c8c63389838727e40b8c18434e54e/longcat_video/modules/avatar/attention.py",
-  "fa3-setup.py": "https://raw.githubusercontent.com/Dao-AILab/flash-attention/060c9188beec3a8b62b33a3bfa6d5d2d44975fab/hopper/setup.py"
+  "fa3-setup.py": "https://raw.githubusercontent.com/Dao-AILab/flash-attention/060c9188beec3a8b62b33a3bfa6d5d2d44975fab/hopper/setup.py",
+  "upstream-torch_utils.py": "https://raw.githubusercontent.com/meituan-longcat/LongCat-Video/58eb336edc5c8c63389838727e40b8c18434e54e/longcat_video/audio_process/torch_utils.py"
 }

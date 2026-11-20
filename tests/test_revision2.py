@@ -485,3 +485,74 @@ def test_pinned_model_accepts_attention_config_and_upstream_recipe():
     assert 'backend="nccl", timeout=datetime.timedelta(seconds=3600)' in engine
     upstream = (ROOT / "evidence/upstream-multi-demo.py").read_text(encoding="utf-8")
     assert "audio_type = 'para'" in upstream and "ref_target_masks=ref_target_masks" in upstream
+
+
+def upstream_ref_attn_map(noise_q, ref_k, ref_target_masks):
+    """Eager copy of upstream calculate_x_ref_attn_map (evidence/upstream-torch_utils.py) without compile and torch_gc."""
+    ref_k = ref_k.to(noise_q.dtype).to(noise_q.device)
+    scale = 1.0 / noise_q.shape[-1] ** 0.5
+    noise_q = (noise_q * scale).transpose(1, 2)
+    ref_k = ref_k.transpose(1, 2)
+    source = (noise_q @ ref_k.transpose(-2, -1)).softmax(-1)
+    maps = []
+    for mask in ref_target_masks.to(noise_q.dtype):
+        mask = mask[None, None, None, ...]
+        maps.append((source * mask).sum(-1).div(mask.sum()).permute(0, 2, 1).mean(-1))
+    return torch_cat(maps)
+
+
+def torch_cat(maps):
+    import torch
+    return torch.concat(maps, dim=0)
+
+
+def test_chunked_ref_map_equals_upstream_one_piece():
+    # Live 2026-11-20: a 720p dialog ran out of GPU memory in upstream's one-piece map; chunks must give the same map.
+    import torch
+    from dialog import chunked_ref_attn_map
+    upstream = (ROOT / "evidence/upstream-torch_utils.py").read_text(encoding="utf-8")
+    assert "x_ref_attn_map_source = attn.softmax(-1)" in upstream and "x_ref_attn_map.sum(-1) / ref_target_mask.sum()" in upstream
+    generator = torch.Generator().manual_seed(7)
+    for batch, length, ref, chunk in ((1, 37, 20, 5), (1, 64, 30, 64), (2, 23, 12, 4), (1, 50, 16, 1000)):
+        q = torch.randn(batch, length, 4, 8, generator=generator)
+        k = torch.randn(batch, ref, 4, 8, generator=generator)
+        masks = torch.zeros(3, ref)
+        masks[0, :ref // 3] = 1
+        masks[1, ref // 3:2 * ref // 3] = 1
+        masks[2, 2 * ref // 3:] = 1
+        expected = upstream_ref_attn_map(q, k, masks)
+        result = chunked_ref_attn_map(q, k, masks, q_chunk=chunk)
+        assert result.shape == expected.shape == (3 * batch, length) and result.dtype == q.dtype
+        torch.testing.assert_close(result, expected, atol=1e-6, rtol=1e-5)
+    q, k = torch.randn(1, 40, 4, 16, generator=generator).bfloat16(), torch.randn(1, 24, 4, 16, generator=generator).bfloat16()
+    masks = (torch.arange(24) % 3 == torch.arange(3)[:, None]).bfloat16()
+    result = chunked_ref_attn_map(q, k, masks, q_chunk=7)
+    assert result.dtype == torch.bfloat16
+    torch.testing.assert_close(result.float(), upstream_ref_attn_map(q.float(), k.float(), masks.float()), atol=2e-2, rtol=2e-2)
+
+
+def test_chunked_ref_map_is_installed_before_the_dit(monkeypatch):
+    import sys
+    import types
+    import torch
+    import dialog
+    package, audio, utils = (types.ModuleType(name) for name in (
+        "longcat_video", "longcat_video.audio_process", "longcat_video.audio_process.torch_utils"))
+    utils.calculate_x_ref_attn_map = "upstream"
+    audio.torch_utils = utils
+    package.audio_process = audio
+    for name, module in (("longcat_video", package), ("longcat_video.audio_process", audio),
+                         ("longcat_video.audio_process.torch_utils", utils)):
+        monkeypatch.setitem(sys.modules, name, module)
+    dialog.install_chunked_ref_map(torch)
+    assert utils.calculate_x_ref_attn_map != "upstream" and callable(utils.calculate_x_ref_attn_map)
+    source = (ROOT / "avatar_engine.py").read_text(encoding="utf-8")
+    assert source.index("install_chunked_ref_map(torch)") < source.index("LongCatVideoAvatarTransformer3DModel.from_pretrained")
+
+
+def test_oom_message_keeps_only_sizes():
+    from avatar_engine import oom_numbers
+    message = ("CUDA out of memory. Tried to allocate 5.27 GiB. GPU 0 has a total capacity of 79.11 GiB of which 3.10 GiB is free. "
+               "Process 123 has 76.0 GiB memory in use. Of the allocated memory 70.2 GiB is allocated by PyTorch /secret/path")
+    assert oom_numbers(message) == "5.27 GiB 79.11 GiB 3.10 GiB 76.0 GiB 70.2 GiB"
+    assert oom_numbers("nothing") == "no sizes"
