@@ -104,6 +104,13 @@ def test_silent_listener_track_skips_the_separator():
     assert source.index("silent_speech(raw)") < source.index("separate_vocals(vocal_separator")
 
 
+def test_whole_silent_take_skips_the_separator_too():
+    # «Тишина» (2026-11-20): one person, one all-zero track; the bypass is not limited to the dialog listener.
+    source = (ROOT / "avatar_engine.py").read_text(encoding="utf-8")
+    loop = source[source.index("for name in track_names:"):source.index("separate_vocals(vocal_separator")]
+    assert "if dialog" not in loop and "silent_speech(raw)" in loop
+
+
 def test_pixel_boxes_default_and_fractional_order():
     assert pixel_boxes(None, 100, 80) == [[8, 5, 72, 45], [8, 55, 72, 95]]
     assert pixel_boxes({"person1": [.1, .2, .6, .7], "person2": [.9, .9, 1, 1]}, 100, 80) == [
