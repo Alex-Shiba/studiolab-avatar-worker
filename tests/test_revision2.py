@@ -170,9 +170,33 @@ def test_mix_limits_loud_sum(tmp_path):
     with wave.open(str(path), "wb") as out:
         out.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
         out.writeframes(samples.tobytes())
-    mixed = read_samples(mix_audio(path, path, tmp_path, 2))
-    assert len(mixed) == 32000 and np.max(np.abs(mixed)) < 1
-    assert np.max(np.abs(mixed)) > .9
+    output = mix_audio(path, path, tmp_path, 2)
+    assert len(read_samples(output)) == 32000
+    # Clipping is per channel of the stereo file itself (a mono read sums the channels).
+    stereo = np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-i", str(output), "-f", "f32le", "pipe:1"],
+                                          capture_output=True, check=True, timeout=20).stdout, dtype="<f4")
+    assert .9 < np.max(np.abs(stereo)) <= .951
+
+
+def test_mix_uses_no_filter_graph():
+    # Live 2026-11-20: the image's ffmpeg 4.4.2 has no alimiter `latency`, and every dialog take failed at the mix.
+    source = (ROOT / "media.py").read_text(encoding="utf-8")
+    mix = source[source.index("def decode_track"):source.index("def encode_frames")]
+    assert "-filter_complex" not in mix and '"-af"' not in mix and "alimiter=" not in mix
+
+
+def test_mix_keeps_a_voice_beside_silence_unchanged(tmp_path):
+    import wave
+    silence = tmp_path / "silence.wav"
+    with wave.open(str(silence), "wb") as out:
+        out.setparams((1, 2, 48000, 0, "NONE", "not compressed"))
+        out.writeframes(bytes(2 * 96000))
+    voice = tmp_path / "voice.wav"
+    voice.write_bytes(audio_bytes(3, frequency=440))
+    v = read_samples(voice)
+    result = read_samples(mix_audio(voice, silence, tmp_path, 3))
+    assert len(result) == len(v)
+    np.testing.assert_allclose(result[100:-100], v[100:-100], atol=.001)
 
 
 def test_fa3_shim_preserves_tuples_and_is_idempotent():

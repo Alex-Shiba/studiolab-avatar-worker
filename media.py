@@ -24,21 +24,40 @@ def bounded_frames(frames, count):
         yield last
 
 
+MIX_RATE = 48000
+MIX_PEAK = 0.95
+
+
+def decode_track(path):
+    """Plain decode to 48 kHz stereo float samples from the track's first sample."""
+    import numpy as np
+    raw = subprocess.run([
+        "ffmpeg", "-nostdin", "-v", "error", "-protocol_whitelist", "file,pipe", "-i", str(path), "-vn",
+        "-ar", str(MIX_RATE), "-ac", "2", "-f", "f32le", "pipe:1"],
+        stdin=subprocess.DEVNULL, capture_output=True, check=True, timeout=120, env=model_environment(os.environ)).stdout
+    return np.frombuffer(raw, dtype="<f4").reshape(-1, 2)
+
+
 def mix_audio(audio1, audio2, directory, duration):
-    """Mix the original tracks from t=0, pad to the longer one, and limit their sum."""
+    """Mix the original tracks from t=0, pad to the longer one, and keep the sum under MIX_PEAK.
+
+    Summed in numpy: the image's ffmpeg is 4.4.2 (Ubuntu 22.04), whose alimiter has no `latency` option, and the
+    filter graph that used it failed every dialog take (live 2026-11-20). ffmpeg here only decodes and writes.
+    A sum louder than MIX_PEAK is turned down as a whole; a voice beside a silent track is left as it is.
+    """
+    import numpy as np
     output = Path(directory) / "mixed.wav"
-    filters = (
-        f"[0:a]asetpts=PTS-STARTPTS,apad,atrim=duration={duration}[a];"
-        f"[1:a]asetpts=PTS-STARTPTS,apad,atrim=duration={duration}[b];"
-        "[a][b]amix=inputs=2:duration=longest:normalize=0,"
-        "alimiter=limit=0.95:level=false:latency=true[out]")
+    mix = np.zeros((round(duration * MIX_RATE), 2), dtype=np.float32)
+    for path in (audio1, audio2):
+        track = decode_track(path)[:len(mix)]
+        mix[:len(track)] += track
+    peak = float(np.max(np.abs(mix))) if mix.size else 0.0
+    if peak > MIX_PEAK:
+        mix *= MIX_PEAK / peak
     subprocess.run([
-        "ffmpeg", "-nostdin", "-v", "error", "-y",
-        "-protocol_whitelist", "file,pipe", "-i", str(audio1),
-        "-protocol_whitelist", "file,pipe", "-i", str(audio2),
-        "-filter_complex", filters, "-map", "[out]", "-ar", "48000", "-ac", "2",
+        "ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "f32le", "-ar", str(MIX_RATE), "-ac", "2", "-i", "pipe:0",
         "-c:a", "pcm_f32le", "-map_metadata", "-1", str(output)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=120,
+        input=mix.astype("<f4").tobytes(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=120,
         env=model_environment(os.environ))
     return output
 
