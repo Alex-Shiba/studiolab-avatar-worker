@@ -29,13 +29,16 @@ MIX_PEAK = 0.95
 
 
 def decode_track(path):
-    """Plain decode to 48 kHz stereo float samples from the track's first sample."""
+    """Plain decode to 48 kHz mono float samples from the track's first sample.
+
+    Mono, as a single avatar keeps its mono voice: a stereo mix spread a mono voice over two channels 3 dB down, so a
+    dialog sounded quieter than the same voice alone (live 2026-11-20)."""
     import numpy as np
     raw = subprocess.run([
         "ffmpeg", "-nostdin", "-v", "error", "-protocol_whitelist", "file,pipe", "-i", str(path), "-vn",
-        "-ar", str(MIX_RATE), "-ac", "2", "-f", "f32le", "pipe:1"],
+        "-ar", str(MIX_RATE), "-ac", "1", "-f", "f32le", "pipe:1"],
         stdin=subprocess.DEVNULL, capture_output=True, check=True, timeout=120, env=model_environment(os.environ)).stdout
-    return np.frombuffer(raw, dtype="<f4").reshape(-1, 2)
+    return np.frombuffer(raw, dtype="<f4")
 
 
 def mix_audio(audio1, audio2, directory, duration):
@@ -47,7 +50,7 @@ def mix_audio(audio1, audio2, directory, duration):
     """
     import numpy as np
     output = Path(directory) / "mixed.wav"
-    mix = np.zeros((round(duration * MIX_RATE), 2), dtype=np.float32)
+    mix = np.zeros(round(duration * MIX_RATE), dtype=np.float32)
     for path in (audio1, audio2):
         track = decode_track(path)[:len(mix)]
         mix[:len(track)] += track
@@ -55,7 +58,7 @@ def mix_audio(audio1, audio2, directory, duration):
     if peak > MIX_PEAK:
         mix *= MIX_PEAK / peak
     subprocess.run([
-        "ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "f32le", "-ar", str(MIX_RATE), "-ac", "2", "-i", "pipe:0",
+        "ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "f32le", "-ar", str(MIX_RATE), "-ac", "1", "-i", "pipe:0",
         "-c:a", "pcm_f32le", "-map_metadata", "-1", str(output)],
         input=mix.astype("<f4").tobytes(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=120,
         env=model_environment(os.environ))

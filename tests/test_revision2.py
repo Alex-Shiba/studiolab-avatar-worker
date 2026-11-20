@@ -172,10 +172,10 @@ def test_mix_limits_loud_sum(tmp_path):
         out.writeframes(samples.tobytes())
     output = mix_audio(path, path, tmp_path, 2)
     assert len(read_samples(output)) == 32000
-    # Clipping is per channel of the stereo file itself (a mono read sums the channels).
-    stereo = np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-i", str(output), "-f", "f32le", "pipe:1"],
+    # The file's own samples, read without any channel or rate conversion.
+    native = np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-i", str(output), "-f", "f32le", "pipe:1"],
                                           capture_output=True, check=True, timeout=20).stdout, dtype="<f4")
-    assert .9 < np.max(np.abs(stereo)) <= .951
+    assert .9 < np.max(np.abs(native)) <= .951
 
 
 def test_mix_uses_no_filter_graph():
@@ -556,3 +556,23 @@ def test_oom_message_keeps_only_sizes():
                "Process 123 has 76.0 GiB memory in use. Of the allocated memory 70.2 GiB is allocated by PyTorch /secret/path")
     assert oom_numbers(message) == "5.27 GiB 79.11 GiB 3.10 GiB 76.0 GiB 70.2 GiB"
     assert oom_numbers("nothing") == "no sizes"
+
+
+def test_mix_is_mono_and_keeps_a_mono_voice_at_its_own_level(tmp_path):
+    # Live 2026-11-20: a stereo mix spread the mono voice over two channels 3 dB down; a single avatar keeps the voice as is.
+    import wave
+    silence = tmp_path / "quiet.wav"
+    with wave.open(str(silence), "wb") as out:
+        out.setparams((1, 2, 48000, 0, "NONE", "not compressed"))
+        out.writeframes(bytes(2 * 96000))
+    voice = tmp_path / "voice.wav"
+    voice.write_bytes(audio_bytes(3, frequency=440))
+    output = mix_audio(voice, silence, tmp_path, 3)
+    channels = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=channels",
+                               "-of", "csv=p=0", str(output)], capture_output=True, text=True, check=True, timeout=20).stdout.strip()
+    assert channels == "1"
+    native = lambda path: np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-ar", "48000", "-f", "f32le", "pipe:1"],
+                                                       capture_output=True, check=True, timeout=20).stdout, dtype="<f4")
+    mixed, source = native(output), native(voice)
+    rms = lambda samples: float(np.sqrt(np.mean(samples[500:-500] ** 2)))
+    assert abs(rms(mixed) / rms(source) - 1) < .01
